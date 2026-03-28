@@ -1,31 +1,17 @@
 import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-// ─── Storage ──────────────────────────────────────────────────────────────────
-const store = {
-  get(k)    { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-  set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
-};
-
-// ─── Seeds ────────────────────────────────────────────────────────────────────
-const SEED_USERS = [
-  { id:"u1", name:"Superadmin",                loginId:"gnosislab", role:"superadmin", password:"gnosis720325" },
-  { id:"u2", name:"Admin",                     loginId:"hqlab2",    role:"admin",      password:"admin123"     },
-  { id:"u3", name:"Lee Ket Siong",             loginId:"lee001",    role:"staff",      password:"staff123"     },
-  { id:"u4", name:"Sivhesangari",              loginId:"siv001",    role:"staff",      password:"staff123"     },
-  { id:"u5", name:"Erzawati Binti Abdul Sani", loginId:"erza001",   role:"staff",      password:"staff123"     },
-];
-
-const SEED_SOPS = [
-  { id:"s1", title:"TP-QC-001 Internal Quality Control Procedure", version:"v2.1", department:"Haematology",  uploadedAt:"2025-03-01T08:00:00Z", uploadedBy:"Admin", url:"", description:"Covers IQC including Levey-Jennings charts and Westgard rules for all analysers.", version_hash:"h001" },
-  { id:"s2", title:"TP-MB-007 Urine Culture Processing",           version:"v1.0", department:"Microbiology", uploadedAt:"2025-01-20T08:00:00Z", uploadedBy:"Admin", url:"", description:"Specimen plating, incubation, and colony identification workflow.", version_hash:"h003" },
-];
+// ─── Supabase ─────────────────────────────────────────────────────────────────
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_KEY
+);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const uid     = () => Math.random().toString(36).slice(2,10);
 const ini     = (n) => n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
 const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
 const fmtFull = (iso) => new Date(iso).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
-const readKey = (sop) => `${sop.id}_${sop.version_hash}`;
 
 const DEPTS = [
   "General","Resource","Process","Management System",
@@ -52,15 +38,13 @@ const css = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
   :root{
-    --navy:#003366;--navy2:#002244;--navy3:#001833;
+    --navy:#003366;--navy2:#002244;
     --accent:#007BFF;--accent2:#0056b3;
     --slate:#708090;--bg:#F8F9FA;--card:#ffffff;
     --red:#dc3545;--green:#28a745;--gold:#856404;
     --text:#212529;--muted:#6c757d;--border:#dee2e6;
   }
   body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
-
-  /* Login */
   .lw{min-height:100vh;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(135deg,#003366 0%,#002244 60%,#004080 100%);}
   .lc{width:100%;max-width:400px;background:#fff;border-radius:16px;padding:40px 36px;
@@ -71,11 +55,9 @@ const css = `
   .lt{font-size:22px;font-weight:700;text-align:center;color:var(--navy);}
   .ls{font-size:12px;color:var(--muted);text-align:center;margin-top:4px;margin-bottom:28px;}
   .err{background:#fff5f5;border:1px solid #f5c6cb;color:var(--red);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px;}
-
-  /* Header */
-  .hdr{background:var(--navy);border-bottom:3px solid var(--accent);
-    padding:0 28px;display:flex;align-items:center;justify-content:space-between;
-    height:64px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2);}
+  .hdr{background:var(--navy);border-bottom:3px solid var(--accent);padding:0 28px;
+    display:flex;align-items:center;justify-content:space-between;height:64px;
+    position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2);}
   .logo{display:flex;align-items:center;gap:12px;}
   .logom{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));
     display:flex;align-items:center;justify-content:center;
@@ -92,8 +74,6 @@ const css = `
   .rb.staff{background:rgba(0,123,255,.25);color:#7ec8ff;border:1px solid rgba(0,123,255,.45);}
   .logoutbtn{background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:17px;}
   .logoutbtn:hover{color:var(--red);}
-
-  /* Dept Tabs */
   .dept-tabs{background:#fff;border-bottom:2px solid var(--border);padding:0 28px;
     display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;box-shadow:0 1px 4px rgba(0,0,0,.05);}
   .dept-tabs::-webkit-scrollbar{display:none;}
@@ -102,8 +82,6 @@ const css = `
     background:none;border-top:none;border-left:none;border-right:none;font-family:'Inter',sans-serif;}
   .dept-tab:hover{color:var(--navy);}
   .dept-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-
-  /* Layout */
   .pg{max-width:1100px;margin:0 auto;padding:28px 24px;}
   .topbar{display:flex;align-items:center;gap:12px;margin-bottom:22px;flex-wrap:wrap;}
   .sw{flex:1;min-width:200px;position:relative;}
@@ -112,8 +90,6 @@ const css = `
     outline:none;transition:all .18s;box-shadow:0 1px 3px rgba(0,0,0,.06);}
   .sw input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,123,255,.12);}
   .si{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;}
-
-  /* Buttons */
   .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;
     font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .18s;
     font-family:'Inter',sans-serif;white-space:nowrap;}
@@ -134,15 +110,11 @@ const css = `
   .icon-btn{width:30px;height:30px;border-radius:7px;display:inline-flex;align-items:center;
     justify-content:center;cursor:pointer;border:1px solid var(--border);font-size:13px;
     transition:all .18s;background:#fff;font-family:'Inter',sans-serif;}
-
-  /* Avatar */
   .av{border-radius:50%;background:linear-gradient(135deg,var(--navy),var(--accent));
     display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex-shrink:0;}
   .av28{width:28px;height:28px;font-size:11px;}
   .av22{width:22px;height:22px;font-size:9px;}
   .avg{background:linear-gradient(135deg,var(--green),#1a7a3a)!important;}
-
-  /* SOP Row */
   .sop-row{background:#fff;border:1px solid var(--border);border-radius:10px;
     transition:all .2s;margin-bottom:5px;box-shadow:0 1px 4px rgba(0,0,0,.04);}
   .sop-row:hover{border-color:var(--accent);box-shadow:0 3px 12px rgba(0,123,255,.1);}
@@ -157,12 +129,9 @@ const css = `
   .sop-sub{display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap;}
   .muted11{font-size:11px;color:var(--muted);}
   .sop-actions{padding:10px 14px 10px 6px;display:flex;align-items:center;gap:6px;white-space:nowrap;}
-
-  /* Ack area */
   .ack-area{background:#f8f9fa;border-radius:0 0 10px 10px;border:1px solid var(--border);border-top:none;}
   .ack-inner{padding:14px 16px;}
-  .ack-lbl{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
-    color:var(--muted);margin-bottom:10px;}
+  .ack-lbl{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
   .ack-list{display:flex;flex-direction:column;gap:4px;}
   .ack-list-row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);
     border-radius:7px;padding:7px 12px;}
@@ -170,25 +139,17 @@ const css = `
   .ack-list-name{font-size:12px;font-weight:600;color:var(--text);flex:1;}
   .ack-list-date{font-size:11px;color:var(--muted);}
   .no-acks{font-size:12px;color:var(--muted);font-style:italic;}
-
   .rdiv{display:flex;align-items:center;gap:10px;margin:10px 0 6px;}
   .rdline{flex:1;height:1px;background:#b2dfdb;}
-  .rdlbl{font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;
-    color:#28a745;white-space:nowrap;}
-
-  /* Form */
+  .rdlbl{font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#28a745;white-space:nowrap;}
   .inp,.sel,.ta{width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;
-    padding:9px 13px;font-size:13px;color:var(--text);font-family:'Inter',sans-serif;
-    outline:none;transition:all .18s;}
+    padding:9px 13px;font-size:13px;color:var(--text);font-family:'Inter',sans-serif;outline:none;transition:all .18s;}
   .inp:focus,.sel:focus,.ta:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,123,255,.1);}
   .sel option{background:#fff;}
   .ta{resize:vertical;min-height:70px;}
-  .lbl{font-size:11px;font-weight:600;color:var(--slate);letter-spacing:.4px;
-    text-transform:uppercase;margin-bottom:5px;display:block;}
+  .lbl{font-size:11px;font-weight:600;color:var(--slate);letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px;display:block;}
   .fld{margin-bottom:14px;}
   .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-
-  /* Modal */
   .ov{position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(3px);
     z-index:200;display:flex;align-items:center;justify-content:center;padding:18px;animation:fi .18s;}
   .mo{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);
@@ -199,22 +160,22 @@ const css = `
   .cbtn:hover{color:var(--red);}
   .warn-box{background:#fff8e1;border:1px solid #ffeeba;color:var(--gold);
     border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px;line-height:1.55;}
-
-  /* Staff list */
   .staff-row{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border);
     border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
   .staff-info{flex:1;min-width:0;}
   .staff-name{font-size:13px;font-weight:600;color:var(--text);}
   .staff-id{font-size:11px;color:var(--muted);margin-top:2px;}
-  .sec-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:22px;
-    box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  .sec-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
   .sec-ttl{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:16px;
-    display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;
-    border-bottom:1px solid var(--border);}
-
+    display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border);}
+  .loading{display:flex;height:100vh;align-items:center;justify-content:center;
+    font-family:'Inter',sans-serif;color:var(--accent);font-size:13px;flex-direction:column;gap:12px;}
+  .spinner{width:32px;height:32px;border:3px solid #e9ecef;border-top-color:var(--accent);
+    border-radius:50%;animation:spin .8s linear infinite;}
   .empty{text-align:center;padding:48px 0;color:var(--muted);font-size:13px;}
   @keyframes fi{from{opacity:0}to{opacity:1}}
   @keyframes su{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes spin{to{transform:rotate(360deg)}}
 `;
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -222,7 +183,7 @@ export default function App() {
   const [user,       setUser]       = useState(null);
   const [users,      setUsers]      = useState([]);
   const [sops,       setSops]       = useState([]);
-  const [reads,      setReads]      = useState({});
+  const [reads,      setReads]      = useState([]);
   const [ready,      setReady]      = useState(false);
   const [activeDept, setActiveDept] = useState("All");
   const [search,     setSearch]     = useState("");
@@ -233,73 +194,108 @@ export default function App() {
   const [showStaff,   setShowStaff]   = useState(false);
 
   useEffect(() => {
-    let u = store.get("sop_users"); if (!u) { u = SEED_USERS; store.set("sop_users", u); }
-    let s = store.get("sop_docs");  if (!s) { s = SEED_SOPS;  store.set("sop_docs",  s); }
-    let r = store.get("sop_reads"); if (!r) { r = {};          store.set("sop_reads", r); }
-    setUsers(u); setSops(s); setReads(r); setReady(true);
+    (async () => {
+      const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
+        supabase.from("users").select("*"),
+        supabase.from("sops").select("*"),
+        supabase.from("reads").select("*"),
+      ]);
+      setUsers(u || []);
+      setSops(s || []);
+      setReads(r || []);
+      setReady(true);
+    })();
   }, []);
 
-  const saveUsers = u => { setUsers(u); store.set("sop_users", u); };
-  const saveSops  = s => { setSops(s);  store.set("sop_docs",  s); };
-  const saveReads = r => { setReads(r); store.set("sop_reads", r); };
-
-  const acknowledge = sop => {
-    const k = readKey(sop), list = reads[k] || [];
-    if (list.find(r => r.userId === user.id)) return;
-    saveReads({ ...reads, [k]: [...list, { userId:user.id, userName:user.name, readAt:new Date().toISOString() }] });
+  const handleLogin = async (loginId, pass) => {
+    const { data } = await supabase.from("users").select("*")
+      .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();
+    return data || null;
   };
 
-  const hasRead = sop => (reads[readKey(sop)] || []).some(r => r.userId === user?.id);
-  const getAcks = sop =>  reads[readKey(sop)] || [];
+  const handleAddUser = async (f) => {
+    const newUser = { id: uid(), name: f.name, login_id: f.loginId, role: f.role, password: f.password };
+    await supabase.from("users").insert(newUser);
+    setUsers(prev => [...prev, newUser]);
+    setAddUserOpen(false);
+  };
 
-  const handleAddSop = data => {
-    saveSops([...sops, { id:uid(), ...data, uploadedAt:new Date().toISOString(), uploadedBy:user.name, version_hash:uid() }]);
+  const handleRemoveUser = async (id) => {
+    await supabase.from("users").delete().eq("id", id);
+    setUsers(prev => prev.filter(u => u.id !== id));
+  };
+
+  const handleAddSop = async (f) => {
+    const newSop = { id: uid(), title: f.title, version: f.version, department: f.department,
+      description: f.description, url: f.url,
+      uploaded_at: new Date().toISOString(), uploaded_by: user.name, version_hash: uid() };
+    await supabase.from("sops").insert(newSop);
+    setSops(prev => [...prev, newSop]);
     setAddSopOpen(false);
   };
 
-  const handleEditSop = data => {
-    saveSops(sops.map(s => s.id === data.id
-      ? { ...s, ...data, version_hash: data.version !== s.version ? uid() : s.version_hash }
-      : s
-    ));
+  const handleEditSop = async (f) => {
+    const orig = sops.find(s => s.id === f.id);
+    const versionChanged = f.version !== orig.version;
+    const updated = { ...orig, title: f.title, version: f.version, department: f.department,
+      description: f.description, url: f.url,
+      version_hash: versionChanged ? uid() : orig.version_hash };
+    await supabase.from("sops").update(updated).eq("id", f.id);
+    if (versionChanged) {
+      await supabase.from("reads").delete().eq("sop_id", f.id);
+      setReads(prev => prev.filter(r => r.sop_id !== f.id));
+    }
+    setSops(prev => prev.map(s => s.id === f.id ? updated : s));
     setEditSop(null);
   };
 
-  const handleDelete = sop => {
-    const cr = { ...reads };
-    Object.keys(cr).filter(k => k.startsWith(sop.id + "_")).forEach(k => delete cr[k]);
-    saveSops(sops.filter(s => s.id !== sop.id));
-    saveReads(cr);
+  const handleDelete = async (sop) => {
+    await supabase.from("reads").delete().eq("sop_id", sop.id);
+    await supabase.from("sops").delete().eq("id", sop.id);
+    setSops(prev => prev.filter(s => s.id !== sop.id));
+    setReads(prev => prev.filter(r => r.sop_id !== sop.id));
     setDelSop(null);
   };
 
-  const handleRemoveUser = id_ => saveUsers(users.filter(u => u.id !== id_));
+  const acknowledge = async (sop) => {
+    const already = reads.find(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user.id);
+    if (already) return;
+    const newRead = { sop_id: sop.id, version_hash: sop.version_hash,
+      user_id: user.id, user_name: user.name, read_at: new Date().toISOString() };
+    const { data } = await supabase.from("reads").insert(newRead).select().single();
+    if (data) setReads(prev => [...prev, data]);
+  };
+
+  const hasRead = (sop) => reads.some(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id);
+  const getAcks = (sop) => reads.filter(r => r.sop_id === sop.id && r.version_hash === sop.version_hash);
 
   const canManageSops  = user?.role === "admin" || user?.role === "superadmin";
   const canManageUsers = user?.role === "superadmin";
 
-  if (!ready) return <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",fontFamily:"Inter,sans-serif",color:"#007BFF",fontSize:13}}>Loading…</div>;
-  if (!user)  return <Login users={users} onLogin={setUser} />;
+  if (!ready) return (
+    <div className="loading">
+      <style>{css}</style>
+      <div className="spinner"/>
+      <span>Loading SOP Portal…</span>
+    </div>
+  );
 
-  const q        = search.toLowerCase();
-  const filtered = sops.filter(s => !q || s.title.toLowerCase().includes(q) || s.department.toLowerCase().includes(q));
-  const depts    = [...new Set(sops.map(s => s.department))].sort();
-  const tabDepts = ["All", ...depts];
-  const shown    = activeDept === "All" ? filtered : filtered.filter(s => s.department === activeDept);
+  if (!user) return <Login onLogin={handleLogin} setUser={setUser} />;
+
+  const q          = search.toLowerCase();
+  const filtered   = sops.filter(s => !q || s.title.toLowerCase().includes(q) || s.department.toLowerCase().includes(q));
+  const depts      = [...new Set(sops.map(s => s.department))].sort();
+  const tabDepts   = ["All", ...depts];
+  const shown      = activeDept === "All" ? filtered : filtered.filter(s => s.department === activeDept);
   const shownDepts = [...new Set(shown.map(s => s.department))].sort();
 
   return (
     <>
       <style>{css}</style>
-
-      {/* Header */}
       <header className="hdr">
         <div className="logo">
           <div className="logom">GL</div>
-          <div>
-            <div className="logon">Gnosis Laboratories</div>
-            <div className="logos">SOP Document Portal</div>
-          </div>
+          <div><div className="logon">Gnosis Laboratories</div><div className="logos">SOP Document Portal</div></div>
         </div>
         <div className="hr">
           {canManageUsers && (
@@ -322,7 +318,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Dept Tabs — hidden on staff view */}
       {!showStaff && (
         <div className="dept-tabs">
           {tabDepts.map(d => (
@@ -332,10 +327,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Page */}
       <div className="pg">
-
-        {/* Staff List View */}
         {showStaff ? (
           <div className="sec-card">
             <div className="sec-ttl">
@@ -344,16 +336,18 @@ export default function App() {
                 {users.filter(u => u.role !== "superadmin").length} accounts
               </span>
             </div>
-            {users.filter(u => u.role !== "superadmin").sort((a,b) => a.name.localeCompare(b.name)).map(u => (
-              <div key={u.id} className="staff-row">
-                <div className="av av28">{ini(u.name)}</div>
-                <div className="staff-info">
-                  <div className="staff-name">{u.name}</div>
-                  <div className="staff-id">ID: <strong>{u.loginId}</strong> · <span className={`rb ${u.role}`}>{u.role}</span></div>
+            {users.filter(u => u.role !== "superadmin")
+              .sort((a,b) => a.name.localeCompare(b.name))
+              .map(u => (
+                <div key={u.id} className="staff-row">
+                  <div className="av av28">{ini(u.name)}</div>
+                  <div className="staff-info">
+                    <div className="staff-name">{u.name}</div>
+                    <div className="staff-id">ID: <strong>{u.login_id}</strong> · <span className={`rb ${u.role}`}>{u.role}</span></div>
+                  </div>
+                  <button className="btn bd sm" onClick={() => handleRemoveUser(u.id)}>🗑 Remove</button>
                 </div>
-                <button className="btn bd sm" onClick={() => handleRemoveUser(u.id)}>🗑 Remove</button>
-              </div>
-            ))}
+              ))}
           </div>
         ) : (
           <>
@@ -364,14 +358,12 @@ export default function App() {
               </div>
               <span className="muted11">{shown.length} document{shown.length !== 1 ? "s" : ""}</span>
             </div>
-
             {shownDepts.length === 0 && <div className="empty">No SOPs found.</div>}
-
             {shownDepts.map(dept => {
               const style  = ds(dept);
               const all    = shown.filter(s => s.department === dept);
-              const unread = all.filter(s => !hasRead(s)).sort((a,b) => new Date(b.uploadedAt)-new Date(a.uploadedAt));
-              const read   = all.filter(s =>  hasRead(s)).sort((a,b) => new Date(b.uploadedAt)-new Date(a.uploadedAt));
+              const unread = all.filter(s => !hasRead(s)).sort((a,b) => new Date(b.uploaded_at)-new Date(a.uploaded_at));
+              const read   = all.filter(s =>  hasRead(s)).sort((a,b) => new Date(b.uploaded_at)-new Date(a.uploaded_at));
               return (
                 <div key={dept} style={{marginBottom:28}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
@@ -383,18 +375,16 @@ export default function App() {
                   </div>
                   {unread.map(sop => (
                     <SopRow key={sop.id} sop={sop} acks={getAcks(sop)} user={user}
-                      myAck={getAcks(sop).find(r => r.userId === user.id)}
-                      onAck={acknowledge} onEdit={setEditSop} onDelete={setDelSop}
-                      canManage={canManageSops} />
+                      myAck={getAcks(sop).find(r => r.user_id === user.id)}
+                      onAck={acknowledge} onEdit={setEditSop} onDelete={setDelSop} canManage={canManageSops} />
                   ))}
                   {unread.length > 0 && read.length > 0 && (
                     <div className="rdiv"><div className="rdline"/><div className="rdlbl">✓ Acknowledged by me</div><div className="rdline"/></div>
                   )}
                   {read.map(sop => (
                     <SopRow key={sop.id} sop={sop} acks={getAcks(sop)} user={user}
-                      myAck={getAcks(sop).find(r => r.userId === user.id)}
-                      onAck={acknowledge} onEdit={setEditSop} onDelete={setDelSop}
-                      canManage={canManageSops} isAcked />
+                      myAck={getAcks(sop).find(r => r.user_id === user.id)}
+                      onAck={acknowledge} onEdit={setEditSop} onDelete={setDelSop} canManage={canManageSops} isAcked />
                   ))}
                 </div>
               );
@@ -403,11 +393,9 @@ export default function App() {
         )}
       </div>
 
-      {/* Modals */}
       {addSopOpen  && <SopModal onSave={handleAddSop} onClose={() => setAddSopOpen(false)} />}
       {editSop     && <SopModal sop={editSop} onSave={handleEditSop} onClose={() => setEditSop(null)} />}
-      {addUserOpen && <UserModal onAdd={u => { saveUsers([...users, { id:uid(), ...u }]); setAddUserOpen(false); }} onClose={() => setAddUserOpen(false)} />}
-
+      {addUserOpen && <UserModal onAdd={handleAddUser} onClose={() => setAddUserOpen(false)} />}
       {delSop && (
         <div className="ov">
           <div className="mo" style={{maxWidth:360}}>
@@ -432,19 +420,15 @@ export default function App() {
 // ─── SOP Row ──────────────────────────────────────────────────────────────────
 function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canManage }) {
   const [open, setOpen] = useState(false);
-  const sortedAcks = [...acks].sort((a,b) => a.userName.localeCompare(b.userName));
-
+  const sortedAcks = [...acks].sort((a,b) => a.user_name.localeCompare(b.user_name));
   return (
     <div style={{marginBottom:5}}>
       <div className={`sop-row${isAcked ? " acked" : ""}`}
         style={{display:"flex",alignItems:"center",borderRadius:open?"10px 10px 0 0":"10px",borderBottom:open?"none":""}}>
-
         <div style={{padding:"12px 4px 12px 14px",cursor:"pointer",color:"var(--muted)",fontSize:11,
           transition:"transform .2s",transform:open?"rotate(90deg)":"rotate(0deg)",flexShrink:0}}
           onClick={() => setOpen(o => !o)}>▶</div>
-
-        <div style={{flex:1,minWidth:0,padding:"12px 10px 12px 6px",cursor:"pointer"}}
-          onClick={() => setOpen(o => !o)}>
+        <div style={{flex:1,minWidth:0,padding:"12px 10px 12px 6px",cursor:"pointer"}} onClick={() => setOpen(o => !o)}>
           <div className="sop-title-row">
             {isAcked && <span style={{fontSize:13}}>✅</span>}
             <span className={`stitle${isAcked ? " dim" : ""}`}>{sop.title}</span>
@@ -452,14 +436,13 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
             {isAcked && <span className="tag tok">Acknowledged</span>}
           </div>
           <div className="sop-sub">
-            <span className="muted11">Uploaded {fmtDate(sop.uploadedAt)}</span>
+            <span className="muted11">Uploaded {fmtDate(sop.uploaded_at)}</span>
             <span className="muted11">·</span>
-            <span className="muted11">{sop.uploadedBy}</span>
+            <span className="muted11">{sop.uploaded_by}</span>
             <span className="muted11">·</span>
             <span className="muted11">👥 {acks.length} ack{acks.length !== 1 ? "s" : ""}</span>
           </div>
         </div>
-
         <div className="sop-actions">
           {sop.url
             ? <button className="btn bg sm" onClick={e => { e.stopPropagation(); window.open(sop.url,"_blank","noopener,noreferrer"); }}>📎 Open</button>
@@ -477,7 +460,6 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
           </>}
         </div>
       </div>
-
       {open && (
         <div className="ack-area">
           <div className="ack-inner">
@@ -489,14 +471,14 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
                   {sortedAcks.map((a, i) => (
                     <div key={i} className="ack-list-row">
                       <span className="ack-list-num">{i+1}.</span>
-                      <div className="av av22 avg">{ini(a.userName)}</div>
-                      <span className="ack-list-name">{a.userName}</span>
-                      <span className="ack-list-date">{fmtDate(a.readAt)}</span>
+                      <div className="av av22 avg">{ini(a.user_name)}</div>
+                      <span className="ack-list-name">{a.user_name}</span>
+                      <span className="ack-list-date">{fmtDate(a.read_at)}</span>
                     </div>
                   ))}
                 </div>
             }
-            {myAck && <p style={{fontSize:11,color:"var(--green)",marginTop:10}}>✅ You acknowledged on {fmtFull(myAck.readAt)}</p>}
+            {myAck && <p style={{fontSize:11,color:"var(--green)",marginTop:10}}>✅ You acknowledged on {fmtFull(myAck.read_at)}</p>}
           </div>
         </div>
       )}
@@ -513,7 +495,6 @@ function SopModal({ sop, onSave, onClose }) {
   );
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const versionChanged = isEdit && f.version !== sop.version;
-
   return (
     <div className="ov" onClick={onClose}>
       <div className="mo" onClick={e => e.stopPropagation()}>
@@ -554,7 +535,7 @@ function SopModal({ sop, onSave, onClose }) {
 
 // ─── User Modal ───────────────────────────────────────────────────────────────
 function UserModal({ onAdd, onClose }) {
-  const [f, setF] = useState({ name:"", loginId:"", password:"staff123", role:"staff" });
+  const [f, setF] = useState({ name:"", loginId:"", password:"", role:"staff" });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   return (
     <div className="ov" onClick={onClose}>
@@ -565,8 +546,8 @@ function UserModal({ onAdd, onClose }) {
         <div className="g2">
           <div className="fld"><label className="lbl">Login ID *</label>
             <input className="inp" placeholder="e.g. lee001" value={f.loginId} onChange={e => set("loginId", e.target.value)} /></div>
-          <div className="fld"><label className="lbl">Password</label>
-            <input className="inp" value={f.password} onChange={e => set("password", e.target.value)} /></div>
+          <div className="fld"><label className="lbl">Password *</label>
+            <input className="inp" placeholder="Password" value={f.password} onChange={e => set("password", e.target.value)} /></div>
         </div>
         <div className="fld"><label className="lbl">Role</label>
           <select className="sel" value={f.role} onChange={e => set("role", e.target.value)}>
@@ -575,7 +556,7 @@ function UserModal({ onAdd, onClose }) {
           </select></div>
         <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
           <button className="btn bg" onClick={onClose}>Cancel</button>
-          <button className="btn bp" onClick={() => onAdd(f)} disabled={!f.name || !f.loginId}>Add Member</button>
+          <button className="btn bp" onClick={() => onAdd(f)} disabled={!f.name || !f.loginId || !f.password}>Add Member</button>
         </div>
       </div>
     </div>
@@ -583,13 +564,18 @@ function UserModal({ onAdd, onClose }) {
 }
 
 // ─── Login ────────────────────────────────────────────────────────────────────
-function Login({ users, onLogin }) {
+function Login({ onLogin, setUser }) {
   const [loginId, setLoginId] = useState("");
   const [pass,    setPass]    = useState("");
   const [err,     setErr]     = useState("");
-  const go = () => {
-    const u = users.find(u => u.loginId.toLowerCase() === loginId.toLowerCase().trim() && u.password === pass);
-    u ? onLogin(u) : setErr("Invalid ID or password.");
+  const [loading, setLoading] = useState(false);
+  const go = async () => {
+    if (!loginId || !pass) return;
+    setLoading(true); setErr("");
+    const u = await onLogin(loginId, pass);
+    if (u) setUser(u);
+    else   setErr("Invalid ID or password.");
+    setLoading(false);
   };
   return (
     <div className="lw">
@@ -605,7 +591,8 @@ function Login({ users, onLogin }) {
         <div className="fld"><label className="lbl">Password</label>
           <input className="inp" type="password" placeholder="••••••••" value={pass}
             onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} /></div>
-        <button className="btn bp" style={{width:"100%",justifyContent:"center",marginTop:6}} onClick={go}>Sign In →</button>
+        <button className="btn bp" style={{width:"100%",justifyContent:"center",marginTop:6}}
+          onClick={go} disabled={loading}>{loading ? "Signing in…" : "Sign In →"}</button>
       </div>
     </div>
   );

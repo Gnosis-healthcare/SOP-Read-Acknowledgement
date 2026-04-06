@@ -208,30 +208,10 @@ export default function App() {
   }, []);
 
 const handleLogin = async (loginId, pass) => {
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("*")
-    .eq("login_id", loginId.toLowerCase().trim())
-    .eq("password", pass)
-    .single();
-
-  if (userError || !userData) return null;
-
-  // ✅ fetch ONLY this user's reads
-  const { data: readsData, error: readsError } = await supabase
-    .from("reads")
-    .select("*")
-    .eq("user_id", userData.id);
-
-  if (readsError) {
-    console.error(readsError);
-    setReads([]);
-  } else {
-    setReads(readsData || []);
-  }
-
-  return userData;
-};
+    const { data } = await supabase.from("users").select("*")
+      .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();
+    return data || null;
+  };
 
   const handleAddUser = async (f) => {
     const newUser = { id: uid(), name: f.name, login_id: f.loginId, role: f.role, password: f.password };

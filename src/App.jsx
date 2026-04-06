@@ -195,23 +195,17 @@ export default function App() {
 
 useEffect(() => {
     (async () => {
-      const [{ data: u }, { data: s }] = await Promise.all([
+      const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
         supabase.from("users").select("*"),
         supabase.from("sops").select("*"),
+        supabase.from("reads").select("*"),
       ]);
       setUsers(u || []);
       setSops(s || []);
+      setReads(r || []);
       setReady(true);
     })();
   }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data: r } = await supabase.from("reads").select("*");
-      setReads(r || []);
-    })();
-  }, [user?.id]);
 
   // Reload reads whenever user changes
   useEffect(() => {
@@ -277,8 +271,18 @@ useEffect(() => {
     if (already) return;
     const newRead = { sop_id: sop.id, version_hash: sop.version_hash,
       user_id: user.id, user_name: user.name, read_at: new Date().toISOString() };
-    const { data, error } = await supabase.from("reads").insert(newRead).select().single();
-if (error) { console.error("Insert error:", error); alert(error.message); return; }
+    const { data, error } = await supabase
+  .from("reads")
+  .insert(newRead)
+  .select()
+  .single();
+
+if (error) {
+  console.error("Insert error:", error);
+  alert(error.message);
+  return;
+}
+
 if (data) setReads(prev => [...prev, data]);
   };
 

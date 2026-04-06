@@ -193,7 +193,7 @@ export default function App() {
   const [delSop,      setDelSop]      = useState(null);
   const [showStaff,   setShowStaff]   = useState(false);
 
-useEffect(() => {
+  useEffect(() => {
     (async () => {
       const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
         supabase.from("users").select("*"),
@@ -262,22 +262,11 @@ useEffect(() => {
     if (already) return;
     const newRead = { sop_id: sop.id, version_hash: sop.version_hash,
       user_id: user.id, user_name: user.name, read_at: new Date().toISOString() };
-    const { data, error } = await supabase
-  .from("reads")
-  .insert(newRead)
-  .select()
-  .single();
-
-if (error) {
-  console.error("Insert error:", error);
-  alert(error.message);
-  return;
-}
-
-if (data) setReads(prev => [...prev, data]);
+    const { data } = await supabase.from("reads").insert(newRead).select().single();
+    if (data) setReads(prev => [...prev, data]);
   };
 
-  const hasRead = (sop) => reads.some(r => r.sop_id === sop.id && r.user_id === user?.id);
+  const hasRead = (sop) => reads.some(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id);
   const getAcks = (sop) => reads.filter(r => r.sop_id === sop.id && r.version_hash === sop.version_hash);
 
   const canManageSops  = user?.role === "admin" || user?.role === "superadmin";

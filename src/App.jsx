@@ -198,7 +198,7 @@ export default function App() {
       const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
         supabase.from("users").select("*"),
         supabase.from("sops").select("*"),
-        supabase.from("reads").select("*"),
+
       ]);
       setUsers(u || []);
       setSops(s || []);
@@ -208,14 +208,30 @@ export default function App() {
   }, []);
 
 const handleLogin = async (loginId, pass) => {
-    const { data } = await supabase.from("users").select("*")
-      .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();
-    if (data) {
-      const { data: r } = await supabase.from("reads").select("*");
-      setReads(r || []);
-    }
-    return data || null;
-  };
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("login_id", loginId.toLowerCase().trim())
+    .eq("password", pass)
+    .single();
+
+  if (userError || !userData) return null;
+
+  // ✅ fetch ONLY this user's reads
+  const { data: readsData, error: readsError } = await supabase
+    .from("reads")
+    .select("*")
+    .eq("user_id", userData.id);
+
+  if (readsError) {
+    console.error(readsError);
+    setReads([]);
+  } else {
+    setReads(readsData || []);
+  }
+
+  return userData;
+};
 
   const handleAddUser = async (f) => {
     const newUser = { id: uid(), name: f.name, login_id: f.loginId, role: f.role, password: f.password };
@@ -266,9 +282,22 @@ const handleLogin = async (loginId, pass) => {
     if (already) return;
     const newRead = { sop_id: sop.id, version_hash: sop.version_hash,
       user_id: user.id, user_name: user.name, read_at: new Date().toISOString() };
-    const { data } = await supabase.from("reads").insert(newRead).select().single();
-    if (data) setReads(prev => [...prev, data]);
-  };
+const { data, error } = await supabase
+  .from("reads")
+  .insert(newRead)
+  .select()
+  .single();
+
+if (error) {
+  console.error("Insert failed:", error);
+  alert("Failed to save acknowledgement. Please try again.");
+  return;
+}
+
+if (data) {
+  setReads(prev => [...prev, data]);
+}
+  
 
   const hasRead = (sop) => reads.some(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id);
   const getAcks = (sop) => reads.filter(r => r.sop_id === sop.id && r.version_hash === sop.version_hash);

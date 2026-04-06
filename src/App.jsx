@@ -195,11 +195,11 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
-        supabase.from("users").select("*"),
-        supabase.from("sops").select("*"),
-
-      ]);
+const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
+  supabase.from("users").select("*"),
+  supabase.from("sops").select("*"),
+  supabase.from("reads").select("*"),   // ← add this line
+]);
       setUsers(u || []);
       setSops(s || []);
       setReads(r || []);
@@ -257,26 +257,21 @@ const handleLogin = async (loginId, pass) => {
     setDelSop(null);
   };
 
-  const acknowledge = async (sop) => {
+const acknowledge = async (sop) => {
     const already = reads.find(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user.id);
     if (already) return;
     const newRead = { sop_id: sop.id, version_hash: sop.version_hash,
       user_id: user.id, user_name: user.name, read_at: new Date().toISOString() };
-const { data, error } = await supabase
-  .from("reads")
-  .insert(newRead)
-  .select()
-  .single();
-
-if (error) {
-  console.error("Insert failed:", error);
-  alert("Failed to save acknowledgement. Please try again.");
-  return;
-}
-
-if (data) {
-  setReads(prev => [...prev, data]);
-}
+    const { data, error } = await supabase.from("reads").insert(newRead).select().single();
+    if (error) {
+      console.error("Insert failed:", error);
+      alert("Failed to save acknowledgement. Please try again.");
+      return;
+    }
+    if (data) {
+      setReads(prev => [...prev, data]);
+    }
+  };  // ← this closing brace was missing
   
 
   const hasRead = (sop) => reads.some(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id);
@@ -284,6 +279,7 @@ if (data) {
 
   const canManageSops  = user?.role === "admin" || user?.role === "superadmin";
   const canManageUsers = user?.role === "superadmin";
+};
 
   if (!ready) return (
     <div className="loading">

@@ -207,9 +207,13 @@ export default function App() {
     })();
   }, []);
 
-  const handleLogin = async (loginId, pass) => {
+const handleLogin = async (loginId, pass) => {
     const { data } = await supabase.from("users").select("*")
       .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();
+    if (data) {
+      const { data: r } = await supabase.from("reads").select("*");
+      setReads(r || []);
+    }
     return data || null;
   };
 

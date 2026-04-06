@@ -325,7 +325,6 @@ const acknowledge = async (sop) => {
 
   const canManageSops  = user?.role === "admin" || user?.role === "superadmin";
   const canManageUsers = user?.role === "superadmin";
-};
 
   if (!ready) return (
     <div className="loading">

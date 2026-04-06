@@ -207,15 +207,6 @@ useEffect(() => {
     })();
   }, []);
 
-  // Reload reads whenever user changes
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data: r } = await supabase.from("reads").select("*");
-      setReads(r || []);
-    })();
-  }, [user]);
-
   const handleLogin = async (loginId, pass) => {
     const { data } = await supabase.from("users").select("*")
       .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();

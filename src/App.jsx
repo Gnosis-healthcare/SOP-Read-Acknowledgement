@@ -344,9 +344,7 @@ const acknowledge = async (sop) => {
       alert("Failed to save acknowledgement. Please try again.");
       return;
     }
-    if (data) {
-      setReads(prev => [...prev, data]);
-    }
+
   };  // ← this closing brace was missing
   
 

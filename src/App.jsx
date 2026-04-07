@@ -382,7 +382,7 @@ const acknowledge = async (sop) => {
           <div><div className="logon">Gnosis Laboratories</div><div className="logos">SOP Document Portal</div></div>
         </div>
         <div className="hr">
-          {canManageUsers && (
+          {true && (
             <button className="btn bd sm" onClick={handleDeduplicateReads}>
               🧹 Remove Duplicates
             </button>

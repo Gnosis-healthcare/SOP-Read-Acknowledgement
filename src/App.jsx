@@ -305,6 +305,34 @@ const handleLogin = async (loginId, pass) => {
     setDelSop(null);
   };
 
+  const handleDeduplicateReads = async () => {
+    const seen = {};
+    const toDelete = [];
+    [...reads]
+      .sort((a, b) => new Date(a.read_at) - new Date(b.read_at))
+      .forEach(r => {
+        const key = `${r.user_id}_${r.sop_id}_${r.version_hash}`;
+        if (seen[key]) {
+          toDelete.push(r.id);
+        } else {
+          seen[key] = true;
+        }
+      });
+
+    if (toDelete.length === 0) {
+      alert("✅ No duplicates found!");
+      return;
+    }
+
+    const { error } = await supabase.from("reads").delete().in("id", toDelete);
+    if (error) {
+      alert("Failed to remove duplicates: " + error.message);
+      return;
+    }
+    setReads(prev => prev.filter(r => !toDelete.includes(r.id)));
+    alert(`✅ Removed ${toDelete.length} duplicate record${toDelete.length !== 1 ? "s" : ""}.`);
+  };
+
 const acknowledge = async (sop) => {
     const already = reads.find(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user.id);
     if (already) return;
@@ -354,6 +382,11 @@ const acknowledge = async (sop) => {
           <div><div className="logon">Gnosis Laboratories</div><div className="logos">SOP Document Portal</div></div>
         </div>
         <div className="hr">
+          {canManageUsers && (
+            <button className="btn bd sm" onClick={handleDeduplicateReads}>
+              🧹 Remove Duplicates
+            </button>
+          )}
           {canManageUsers && (
             <button className={`btn sm ${showStaff ? "bp" : "bsa"}`} onClick={() => setShowStaff(s => !s)}>
               {showStaff ? "📋 Back to SOPs" : "👥 Staff List"}

@@ -198,13 +198,15 @@ useEffect(() => {
     const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
       supabase.from("users").select("*"),
       supabase.from("sops").select("*"),
-      supabase.from("reads").select("*"),
+      supabase.from("reads").select("*"),   // ← this one line was missing
     ]);
     setUsers(u || []);
     setSops(s || []);
     setReads(r || []);
     setReady(true);
   })();
+}, []);
+
 
   // Real-time: reads (acknowledgements)
   const readsSub = supabase.channel("reads-changes")

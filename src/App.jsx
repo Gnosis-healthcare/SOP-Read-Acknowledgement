@@ -382,15 +382,15 @@ const acknowledge = async (sop) => {
           <div><div className="logon">Gnosis Laboratories</div><div className="logos">SOP Document Portal</div></div>
         </div>
         <div className="hr">
-          {true && (
-            <button className="btn bd sm" onClick={handleDeduplicateReads}>
-              🧹 Remove Duplicates
-            </button>
-          )}
           {canManageUsers && (
-            <button className={`btn sm ${showStaff ? "bp" : "bsa"}`} onClick={() => setShowStaff(s => !s)}>
-              {showStaff ? "📋 Back to SOPs" : "👥 Staff List"}
-            </button>
+            <>
+              <button className={`btn sm ${showStaff ? "bp" : "bsa"}`} onClick={() => setShowStaff(s => !s)}>
+                {showStaff ? "📋 Back to SOPs" : "👥 Staff List"}
+              </button>
+              <button className="btn bd sm" onClick={handleDeduplicateReads}>
+                🧹 Remove Duplicates
+              </button>
+            </>
           )}
           {canManageUsers && (
             <button className="btn bg sm" style={{color:"#fff",borderColor:"rgba(255,255,255,.3)"}} onClick={() => setAddUserOpen(true)}>👤 Add Staff</button>

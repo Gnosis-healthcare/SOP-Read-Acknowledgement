@@ -194,66 +194,53 @@ export default function App() {
   const [showStaff,   setShowStaff]   = useState(false);
 
 useEffect(() => {
-  (async () => {
-    const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
-      supabase.from("users").select("*"),
-      supabase.from("sops").select("*"),
-      supabase.from("reads").select("*"),   // ← this one line was missing
-    ]);
-    setUsers(u || []);
-    setSops(s || []);
-    setReads(r || []);
-    setReady(true);
-  })();
-}, []);
+    (async () => {
+      const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
+        supabase.from("users").select("*"),
+        supabase.from("sops").select("*"),
+        supabase.from("reads").select("*"),
+      ]);
+      setUsers(u || []);
+      setSops(s || []);
+      setReads(r || []);
+      setReady(true);
+    })();
 
+    const readsSub = supabase.channel("reads-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setReads(prev => {
+            if (prev.some(r => r.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
+        }
+        if (payload.eventType === "DELETE") {
+          setReads(prev => prev.filter(r => r.id !== payload.old.id));
+        }
+      })
+      .subscribe();
 
-  // Real-time: reads (acknowledgements)
-  const readsSub = supabase.channel("reads-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
-      if (payload.eventType === "INSERT") {
-        setReads(prev => [...prev, payload.new]);
-      }
-      if (payload.eventType === "DELETE") {
-        setReads(prev => prev.filter(r => r.id !== payload.old.id));
-      }
-    })
-    .subscribe();
+    const sopsSub = supabase.channel("sops-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
+        if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
+        if (payload.eventType === "UPDATE") setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+        if (payload.eventType === "DELETE") setSops(prev => prev.filter(s => s.id !== payload.old.id));
+      })
+      .subscribe();
 
-  // Real-time: sops
-  const sopsSub = supabase.channel("sops-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
-      if (payload.eventType === "INSERT") {
-        setSops(prev => [...prev, payload.new]);
-      }
-      if (payload.eventType === "UPDATE") {
-        setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
-      }
-      if (payload.eventType === "DELETE") {
-        setSops(prev => prev.filter(s => s.id !== payload.old.id));
-      }
-    })
-    .subscribe();
+    const usersSub = supabase.channel("users-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
+        if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
+        if (payload.eventType === "DELETE") setUsers(prev => prev.filter(u => u.id !== payload.old.id));
+      })
+      .subscribe();
 
-  // Real-time: users
-  const usersSub = supabase.channel("users-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
-      if (payload.eventType === "INSERT") {
-        setUsers(prev => [...prev, payload.new]);
-      }
-      if (payload.eventType === "DELETE") {
-        setUsers(prev => prev.filter(u => u.id !== payload.old.id));
-      }
-    })
-    .subscribe();
-
-  // Cleanup on unmount
-  return () => {
-    supabase.removeChannel(readsSub);
-    supabase.removeChannel(sopsSub);
-    supabase.removeChannel(usersSub);
-  };
-}, []);
+    return () => {
+      supabase.removeChannel(readsSub);
+      supabase.removeChannel(sopsSub);
+      supabase.removeChannel(usersSub);
+    };
+  }, []);
 
 const handleLogin = async (loginId, pass) => {
     const { data } = await supabase.from("users").select("*")

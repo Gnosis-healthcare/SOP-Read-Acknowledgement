@@ -193,7 +193,7 @@ export default function App() {
   const [delSop,      setDelSop]      = useState(null);
   const [showStaff,   setShowStaff]   = useState(false);
 
-  // ─── 1. Fetch all data once on page load ─────────────────────────────────────
+  // ─── 1. Fetch all data once on page load ──────────────────────────────────────
   useEffect(() => {
     (async () => {
       const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
@@ -208,22 +208,34 @@ export default function App() {
     })();
   }, []);
 
-  // ─── 2. Re-fetch reads fresh + start real-time when user logs in ──────────────
+  // ─── 2. Re-fetch reads + start realtime on login ──────────────────────────────
+  // FIX A: async IIFE with `active` guard prevents stale setState after logout
   useEffect(() => {
     if (!user) return;
 
-    // Re-fetch all reads fresh every time user logs in
-    // This ensures old SOPs acknowledgements are always up to date
-    supabase.from("reads").select("*").then(({ data }) => {
-      if (data) setReads(data);
-    });
+    let active = true;
+
+    // Re-fetch all reads fresh on every login — ensures user_id comparisons
+    // always work against live DB data rather than stale pre-login state
+    (async () => {
+      const { data } = await supabase.from("reads").select("*");
+      if (active && data) setReads(data);
+    })();
 
     const readsSub = supabase.channel("reads-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
         if (payload.eventType === "INSERT") {
           setReads(prev => {
-            if (prev.some(r => r.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
+            // FIX B: strip the matching optimistic (_pending) row, then add the
+            // confirmed DB row — prevents duplicates in the ack list
+            const withoutPending = prev.filter(r =>
+              !(r._pending &&
+                r.sop_id       === payload.new.sop_id &&
+                r.user_id      === payload.new.user_id &&
+                r.version_hash === payload.new.version_hash)
+            );
+            if (withoutPending.some(r => r.id === payload.new.id)) return withoutPending;
+            return [...withoutPending, payload.new];
           });
         }
         if (payload.eventType === "DELETE") {
@@ -248,6 +260,7 @@ export default function App() {
       .subscribe();
 
     return () => {
+      active = false; // cancel any in-flight re-fetch setState
       supabase.removeChannel(readsSub);
       supabase.removeChannel(sopsSub);
       supabase.removeChannel(usersSub);
@@ -318,22 +331,44 @@ export default function App() {
     alert(`✅ Removed ${toDelete.length} duplicate record${toDelete.length !== 1 ? "s" : ""}.`);
   };
 
+  // FIX C: Optimistic update without .select().single()
+  // Your `reads.id` is a serial integer (nextval sequence), not a UUID.
+  // Calling .select().single() after insert was failing silently because the
+  // anon key doesn't have SELECT-after-INSERT permission by default with serial PKs.
+  // Instead: write optimistic row to state immediately for instant UI feedback,
+  // do a plain insert (no .select()), and let the realtime channel deliver the
+  // confirmed row. On error, roll back the optimistic row and show the message.
   const acknowledge = async (sop) => {
     const already = reads.find(r =>
-      r.sop_id === sop.id &&
+      r.sop_id       === sop.id &&
       r.version_hash === sop.version_hash &&
-      r.user_id === user.id
+      r.user_id      === user.id
     );
     if (already) return;
+
     const newRead = {
-      sop_id: sop.id, version_hash: sop.version_hash,
-      user_id: user.id, user_name: user.name, read_at: new Date().toISOString()
+      sop_id:       sop.id,
+      version_hash: sop.version_hash,
+      user_id:      user.id,
+      user_name:    user.name,
+      read_at:      new Date().toISOString(),
     };
+
+    // Add optimistic row immediately so the button flips to ✅ Done instantly
+    const optimisticRow = { ...newRead, id: "_pending_" + uid(), _pending: true };
+    setReads(prev => [...prev, optimisticRow]);
+
+    // Plain insert — no .select().single() — compatible with serial integer id
     const { error } = await supabase.from("reads").insert(newRead);
+
     if (error) {
-      console.error("Insert failed:", error);
-      alert("Failed to save acknowledgement. Please try again.");
+      console.error("Acknowledge insert failed:", error);
+      // Roll back optimistic row so the button returns to Acknowledge
+      setReads(prev => prev.filter(r => r.id !== optimisticRow.id));
+      alert("Failed to save acknowledgement: " + error.message);
     }
+    // On success: realtime INSERT event will arrive and FIX B above will
+    // swap out the _pending row for the real DB row automatically
   };
 
   // ─── Derived state ────────────────────────────────────────────────────────────
@@ -572,7 +607,7 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
               ? <div className="no-acks">No one has acknowledged this document yet.</div>
               : <div className="ack-list">
                   {sortedAcks.map((a, i) => (
-                    <div key={i} className="ack-list-row">
+                    <div key={a.id ?? i} className="ack-list-row">
                       <span className="ack-list-num">{i + 1}.</span>
                       <div className="av av22 avg">{ini(a.user_name)}</div>
                       <span className="ack-list-name">{a.user_name}</span>

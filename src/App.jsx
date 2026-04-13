@@ -8,30 +8,30 @@ const supabase = createClient(
 );
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const uid     = () => Math.random().toString(36).slice(2,10);
-const ini     = (n) => n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
-const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-const fmtFull = (iso) => new Date(iso).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+const uid     = () => Math.random().toString(36).slice(2, 10);
+const ini     = (n) => n.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
+const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+const fmtFull = (iso) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 const DEPTS = [
-  "General","Resource","Process","Management System",
-  "Biochemistry","Immunology","Haematology","Urinalysis",
-  "Microbiology","Molecular Diagnostic"
+  "General", "Resource", "Process", "Management System",
+  "Biochemistry", "Immunology", "Haematology", "Urinalysis",
+  "Microbiology", "Molecular Diagnostic"
 ];
 
 const DEPT_COLOURS = {
-  "General":             { bg:"rgba(0,123,255,.1)",   border:"rgba(0,123,255,.35)",  text:"#007BFF" },
-  "Resource":            { bg:"rgba(112,128,144,.12)",border:"rgba(112,128,144,.4)", text:"#4a6070" },
-  "Process":             { bg:"rgba(0,51,102,.12)",   border:"rgba(0,51,102,.35)",   text:"#003366" },
-  "Management System":   { bg:"rgba(23,162,184,.1)",  border:"rgba(23,162,184,.35)", text:"#0d7a8f" },
-  "Biochemistry":        { bg:"rgba(255,193,7,.1)",   border:"rgba(255,193,7,.35)",  text:"#856404" },
-  "Immunology":          { bg:"rgba(111,66,193,.1)",  border:"rgba(111,66,193,.35)", text:"#6f42c1" },
-  "Haematology":         { bg:"rgba(220,53,69,.1)",   border:"rgba(220,53,69,.35)",  text:"#dc3545" },
-  "Urinalysis":          { bg:"rgba(255,133,27,.1)",  border:"rgba(255,133,27,.35)", text:"#c96000" },
-  "Microbiology":        { bg:"rgba(40,167,69,.1)",   border:"rgba(40,167,69,.35)",  text:"#28a745" },
-  "Molecular Diagnostic":{ bg:"rgba(0,86,179,.1)",    border:"rgba(0,86,179,.35)",   text:"#0056b3" },
+  "General":              { bg: "rgba(0,123,255,.1)",    border: "rgba(0,123,255,.35)",   text: "#007BFF" },
+  "Resource":             { bg: "rgba(112,128,144,.12)", border: "rgba(112,128,144,.4)",  text: "#4a6070" },
+  "Process":              { bg: "rgba(0,51,102,.12)",    border: "rgba(0,51,102,.35)",    text: "#003366" },
+  "Management System":    { bg: "rgba(23,162,184,.1)",   border: "rgba(23,162,184,.35)",  text: "#0d7a8f" },
+  "Biochemistry":         { bg: "rgba(255,193,7,.1)",    border: "rgba(255,193,7,.35)",   text: "#856404" },
+  "Immunology":           { bg: "rgba(111,66,193,.1)",   border: "rgba(111,66,193,.35)",  text: "#6f42c1" },
+  "Haematology":          { bg: "rgba(220,53,69,.1)",    border: "rgba(220,53,69,.35)",   text: "#dc3545" },
+  "Urinalysis":           { bg: "rgba(255,133,27,.1)",   border: "rgba(255,133,27,.35)",  text: "#c96000" },
+  "Microbiology":         { bg: "rgba(40,167,69,.1)",    border: "rgba(40,167,69,.35)",   text: "#28a745" },
+  "Molecular Diagnostic": { bg: "rgba(0,86,179,.1)",     border: "rgba(0,86,179,.35)",    text: "#0056b3" },
 };
-const ds = (d) => DEPT_COLOURS[d] || { bg:"rgba(108,117,125,.1)", border:"rgba(108,117,125,.35)", text:"#6c757d" };
+const ds = (d) => DEPT_COLOURS[d] || { bg: "rgba(108,117,125,.1)", border: "rgba(108,117,125,.35)", text: "#6c757d" };
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const css = `
@@ -180,20 +180,22 @@ const css = `
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user,       setUser]       = useState(null);
-  const [users,      setUsers]      = useState([]);
-  const [sops,       setSops]       = useState([]);
-  const [reads,      setReads]      = useState([]);
-  const [ready,      setReady]      = useState(false);
-  const [activeDept, setActiveDept] = useState("All");
-  const [search,     setSearch]     = useState("");
+  const [user,        setUser]        = useState(null);
+  const [users,       setUsers]       = useState([]);
+  const [sops,        setSops]        = useState([]);
+  const [reads,       setReads]       = useState([]);
+  const [ready,       setReady]       = useState(false);
+  const [activeDept,  setActiveDept]  = useState("All");
+  const [search,      setSearch]      = useState("");
   const [addSopOpen,  setAddSopOpen]  = useState(false);
   const [editSop,     setEditSop]     = useState(null);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [delSop,      setDelSop]      = useState(null);
   const [showStaff,   setShowStaff]   = useState(false);
 
-useEffect(() => {
+  // ─── Load data + real-time subscriptions ────────────────────────────────────
+  useEffect(() => {
+    // 1. Initial fetch
     (async () => {
       const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
         supabase.from("users").select("*"),
@@ -206,10 +208,12 @@ useEffect(() => {
       setReady(true);
     })();
 
+    // 2. Real-time: reads
     const readsSub = supabase.channel("reads-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
         if (payload.eventType === "INSERT") {
           setReads(prev => {
+            // Prevent duplicate if already added locally
             if (prev.some(r => r.id === payload.new.id)) return prev;
             return [...prev, payload.new];
           });
@@ -220,6 +224,7 @@ useEffect(() => {
       })
       .subscribe();
 
+    // 3. Real-time: sops
     const sopsSub = supabase.channel("sops-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
         if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
@@ -228,6 +233,7 @@ useEffect(() => {
       })
       .subscribe();
 
+    // 4. Real-time: users
     const usersSub = supabase.channel("users-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
         if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
@@ -235,6 +241,7 @@ useEffect(() => {
       })
       .subscribe();
 
+    // 5. Cleanup
     return () => {
       supabase.removeChannel(readsSub);
       supabase.removeChannel(sopsSub);
@@ -242,7 +249,8 @@ useEffect(() => {
     };
   }, []);
 
-const handleLogin = async (loginId, pass) => {
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+  const handleLogin = async (loginId, pass) => {
     const { data } = await supabase.from("users").select("*")
       .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();
     return data || null;
@@ -251,44 +259,41 @@ const handleLogin = async (loginId, pass) => {
   const handleAddUser = async (f) => {
     const newUser = { id: uid(), name: f.name, login_id: f.loginId, role: f.role, password: f.password };
     await supabase.from("users").insert(newUser);
-    setUsers(prev => [...prev, newUser]);
     setAddUserOpen(false);
   };
 
   const handleRemoveUser = async (id) => {
     await supabase.from("users").delete().eq("id", id);
-    setUsers(prev => prev.filter(u => u.id !== id));
   };
 
   const handleAddSop = async (f) => {
-    const newSop = { id: uid(), title: f.title, version: f.version, department: f.department,
+    const newSop = {
+      id: uid(), title: f.title, version: f.version, department: f.department,
       description: f.description, url: f.url,
-      uploaded_at: new Date().toISOString(), uploaded_by: user.name, version_hash: uid() };
+      uploaded_at: new Date().toISOString(), uploaded_by: user.name, version_hash: uid()
+    };
     await supabase.from("sops").insert(newSop);
-    setSops(prev => [...prev, newSop]);
     setAddSopOpen(false);
   };
 
   const handleEditSop = async (f) => {
     const orig = sops.find(s => s.id === f.id);
     const versionChanged = f.version !== orig.version;
-    const updated = { ...orig, title: f.title, version: f.version, department: f.department,
+    const updated = {
+      ...orig, title: f.title, version: f.version, department: f.department,
       description: f.description, url: f.url,
-      version_hash: versionChanged ? uid() : orig.version_hash };
+      version_hash: versionChanged ? uid() : orig.version_hash
+    };
     await supabase.from("sops").update(updated).eq("id", f.id);
     if (versionChanged) {
       await supabase.from("reads").delete().eq("sop_id", f.id);
-      setReads(prev => prev.filter(r => r.sop_id !== f.id));
     }
-    setSops(prev => prev.map(s => s.id === f.id ? updated : s));
     setEditSop(null);
   };
 
   const handleDelete = async (sop) => {
     await supabase.from("reads").delete().eq("sop_id", sop.id);
     await supabase.from("sops").delete().eq("id", sop.id);
-    setSops(prev => prev.filter(s => s.id !== sop.id));
-    setReads(prev => prev.filter(r => r.sop_id !== sop.id));
     setDelSop(null);
   };
 
@@ -299,58 +304,58 @@ const handleLogin = async (loginId, pass) => {
       .sort((a, b) => new Date(a.read_at) - new Date(b.read_at))
       .forEach(r => {
         const key = `${r.user_id}_${r.sop_id}_${r.version_hash}`;
-        if (seen[key]) {
-          toDelete.push(r.id);
-        } else {
-          seen[key] = true;
-        }
+        if (seen[key]) toDelete.push(r.id);
+        else seen[key] = true;
       });
-
-    if (toDelete.length === 0) {
-      alert("✅ No duplicates found!");
-      return;
-    }
-
+    if (toDelete.length === 0) { alert("✅ No duplicates found!"); return; }
     const { error } = await supabase.from("reads").delete().in("id", toDelete);
-    if (error) {
-      alert("Failed to remove duplicates: " + error.message);
-      return;
-    }
-    setReads(prev => prev.filter(r => !toDelete.includes(r.id)));
+    if (error) { alert("Failed to remove duplicates: " + error.message); return; }
     alert(`✅ Removed ${toDelete.length} duplicate record${toDelete.length !== 1 ? "s" : ""}.`);
   };
 
-const acknowledge = async (sop) => {
-    const already = reads.find(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user.id);
+  const acknowledge = async (sop) => {
+    const already = reads.find(r =>
+      r.sop_id === sop.id &&
+      r.version_hash === sop.version_hash &&
+      r.user_id === user.id
+    );
     if (already) return;
-    const newRead = { sop_id: sop.id, version_hash: sop.version_hash,
-      user_id: user.id, user_name: user.name, read_at: new Date().toISOString() };
-    const { data, error } = await supabase.from("reads").insert(newRead).select().single();
+    const newRead = {
+      sop_id: sop.id, version_hash: sop.version_hash,
+      user_id: user.id, user_name: user.name, read_at: new Date().toISOString()
+    };
+    const { error } = await supabase.from("reads").insert(newRead);
     if (error) {
       console.error("Insert failed:", error);
       alert("Failed to save acknowledgement. Please try again.");
-      return;
     }
+    // No setReads here — real-time subscription handles the state update
+  };
 
-  };  // ← this closing brace was missing
-  
-
-  const hasRead = (sop) => reads.some(r => r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id);
-  const getAcks = (sop) => reads.filter(r => r.sop_id === sop.id && r.version_hash === sop.version_hash);
+  // ─── Derived ────────────────────────────────────────────────────────────────
+  const hasRead = (sop) => reads.some(r =>
+    r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id
+  );
+  const getAcks = (sop) => reads.filter(r =>
+    r.sop_id === sop.id && r.version_hash === sop.version_hash
+  );
 
   const canManageSops  = user?.role === "admin" || user?.role === "superadmin";
   const canManageUsers = user?.role === "superadmin";
 
+  // ─── Loading ────────────────────────────────────────────────────────────────
   if (!ready) return (
     <div className="loading">
       <style>{css}</style>
-      <div className="spinner"/>
+      <div className="spinner" />
       <span>Loading SOP Portal…</span>
     </div>
   );
 
+  // ─── Login ──────────────────────────────────────────────────────────────────
   if (!user) return <Login onLogin={handleLogin} setUser={setUser} />;
 
+  // ─── Main ───────────────────────────────────────────────────────────────────
   const q          = search.toLowerCase();
   const filtered   = sops.filter(s => !q || s.title.toLowerCase().includes(q) || s.department.toLowerCase().includes(q));
   const depts      = [...new Set(sops.map(s => s.department))].sort();
@@ -361,10 +366,15 @@ const acknowledge = async (sop) => {
   return (
     <>
       <style>{css}</style>
+
+      {/* Header */}
       <header className="hdr">
         <div className="logo">
           <div className="logom">GL</div>
-          <div><div className="logon">Gnosis Laboratories</div><div className="logos">SOP Document Portal</div></div>
+          <div>
+            <div className="logon">Gnosis Laboratories</div>
+            <div className="logos">SOP Document Portal</div>
+          </div>
         </div>
         <div className="hr">
           {canManageUsers && (
@@ -375,13 +385,15 @@ const acknowledge = async (sop) => {
               <button className="btn bd sm" onClick={handleDeduplicateReads}>
                 🧹 Remove Duplicates
               </button>
+              <button className="btn bg sm" style={{ color: "#fff", borderColor: "rgba(255,255,255,.3)" }} onClick={() => setAddUserOpen(true)}>
+                👤 Add Staff
+              </button>
             </>
           )}
-          {canManageUsers && (
-            <button className="btn bg sm" style={{color:"#fff",borderColor:"rgba(255,255,255,.3)"}} onClick={() => setAddUserOpen(true)}>👤 Add Staff</button>
-          )}
           {canManageSops && (
-            <button className="btn bg sm" style={{color:"#fff",borderColor:"rgba(255,255,255,.3)"}} onClick={() => setAddSopOpen(true)}>➕ Add SOP</button>
+            <button className="btn bg sm" style={{ color: "#fff", borderColor: "rgba(255,255,255,.3)" }} onClick={() => setAddSopOpen(true)}>
+              ➕ Add SOP
+            </button>
           )}
           <div className="upill">
             <div className="av av28">{ini(user.name)}</div>
@@ -392,6 +404,7 @@ const acknowledge = async (sop) => {
         </div>
       </header>
 
+      {/* Dept tabs */}
       {!showStaff && (
         <div className="dept-tabs">
           {tabDepts.map(d => (
@@ -401,17 +414,18 @@ const acknowledge = async (sop) => {
         </div>
       )}
 
+      {/* Main content */}
       <div className="pg">
         {showStaff ? (
           <div className="sec-card">
             <div className="sec-ttl">
               <span>👥 Staff Account List</span>
-              <span style={{fontSize:12,color:"var(--muted)",fontWeight:400}}>
+              <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 400 }}>
                 {users.filter(u => u.role !== "superadmin").length} accounts
               </span>
             </div>
             {users.filter(u => u.role !== "superadmin")
-              .sort((a,b) => a.name.localeCompare(b.name))
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(u => (
                 <div key={u.id} className="staff-row">
                   <div className="av av28">{ini(u.name)}</div>
@@ -436,16 +450,18 @@ const acknowledge = async (sop) => {
             {shownDepts.map(dept => {
               const style  = ds(dept);
               const all    = shown.filter(s => s.department === dept);
-              const unread = all.filter(s => !hasRead(s)).sort((a,b) => new Date(b.uploaded_at)-new Date(a.uploaded_at));
-              const read   = all.filter(s =>  hasRead(s)).sort((a,b) => new Date(b.uploaded_at)-new Date(a.uploaded_at));
+              const unread = all.filter(s => !hasRead(s)).sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
+              const read   = all.filter(s =>  hasRead(s)).sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
               return (
-                <div key={dept} style={{marginBottom:28}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                    <div style={{fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",
-                      padding:"4px 13px",borderRadius:999,whiteSpace:"nowrap",
-                      background:style.bg,border:`1px solid ${style.border}`,color:style.text}}>{dept}</div>
-                    <span style={{fontSize:12,color:"var(--muted)"}}>{all.length} doc{all.length!==1?"s":""}</span>
-                    <div style={{flex:1,height:1,background:"var(--border)"}}/>
+                <div key={dept} style={{ marginBottom: 28 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <div style={{
+                      fontSize: 11, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase",
+                      padding: "4px 13px", borderRadius: 999, whiteSpace: "nowrap",
+                      background: style.bg, border: `1px solid ${style.border}`, color: style.text
+                    }}>{dept}</div>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>{all.length} doc{all.length !== 1 ? "s" : ""}</span>
+                    <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
                   </div>
                   {unread.map(sop => (
                     <SopRow key={sop.id} sop={sop} acks={getAcks(sop)} user={user}
@@ -453,7 +469,11 @@ const acknowledge = async (sop) => {
                       onAck={acknowledge} onEdit={setEditSop} onDelete={setDelSop} canManage={canManageSops} />
                   ))}
                   {unread.length > 0 && read.length > 0 && (
-                    <div className="rdiv"><div className="rdline"/><div className="rdlbl">✓ Acknowledged by me</div><div className="rdline"/></div>
+                    <div className="rdiv">
+                      <div className="rdline" />
+                      <div className="rdlbl">✓ Acknowledged by me</div>
+                      <div className="rdline" />
+                    </div>
                   )}
                   {read.map(sop => (
                     <SopRow key={sop.id} sop={sop} acks={getAcks(sop)} user={user}
@@ -467,19 +487,20 @@ const acknowledge = async (sop) => {
         )}
       </div>
 
+      {/* Modals */}
       {addSopOpen  && <SopModal onSave={handleAddSop} onClose={() => setAddSopOpen(false)} />}
       {editSop     && <SopModal sop={editSop} onSave={handleEditSop} onClose={() => setEditSop(null)} />}
       {addUserOpen && <UserModal onAdd={handleAddUser} onClose={() => setAddUserOpen(false)} />}
       {delSop && (
         <div className="ov">
-          <div className="mo" style={{maxWidth:360}}>
-            <div style={{textAlign:"center",padding:"6px 0 4px"}}>
-              <div style={{fontSize:36,marginBottom:12}}>🗑️</div>
-              <div style={{fontWeight:700,fontSize:15,marginBottom:8,color:"var(--navy)"}}>Delete this SOP?</div>
-              <div style={{fontSize:12,color:"var(--muted)",marginBottom:20,lineHeight:1.65}}>
-                <strong>{delSop.title}</strong><br/>All acknowledgement records will be permanently removed.
+          <div className="mo" style={{ maxWidth: 360 }}>
+            <div style={{ textAlign: "center", padding: "6px 0 4px" }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🗑️</div>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, color: "var(--navy)" }}>Delete this SOP?</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 20, lineHeight: 1.65 }}>
+                <strong>{delSop.title}</strong><br />All acknowledgement records will be permanently removed.
               </div>
-              <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
                 <button className="btn bg" onClick={() => setDelSop(null)}>Cancel</button>
                 <button className="btn bd" onClick={() => handleDelete(delSop)}>Delete</button>
               </div>
@@ -494,17 +515,18 @@ const acknowledge = async (sop) => {
 // ─── SOP Row ──────────────────────────────────────────────────────────────────
 function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canManage }) {
   const [open, setOpen] = useState(false);
-  const sortedAcks = [...acks].sort((a,b) => a.user_name.localeCompare(b.user_name));
+  const sortedAcks = [...acks].sort((a, b) => a.user_name.localeCompare(b.user_name));
   return (
-    <div style={{marginBottom:5}}>
+    <div style={{ marginBottom: 5 }}>
       <div className={`sop-row${isAcked ? " acked" : ""}`}
-        style={{display:"flex",alignItems:"center",borderRadius:open?"10px 10px 0 0":"10px",borderBottom:open?"none":""}}>
-        <div style={{padding:"12px 4px 12px 14px",cursor:"pointer",color:"var(--muted)",fontSize:11,
-          transition:"transform .2s",transform:open?"rotate(90deg)":"rotate(0deg)",flexShrink:0}}
-          onClick={() => setOpen(o => !o)}>▶</div>
-        <div style={{flex:1,minWidth:0,padding:"12px 10px 12px 6px",cursor:"pointer"}} onClick={() => setOpen(o => !o)}>
+        style={{ display: "flex", alignItems: "center", borderRadius: open ? "10px 10px 0 0" : "10px", borderBottom: open ? "none" : "" }}>
+        <div style={{
+          padding: "12px 4px 12px 14px", cursor: "pointer", color: "var(--muted)", fontSize: 11,
+          transition: "transform .2s", transform: open ? "rotate(90deg)" : "rotate(0deg)", flexShrink: 0
+        }} onClick={() => setOpen(o => !o)}>▶</div>
+        <div style={{ flex: 1, minWidth: 0, padding: "12px 10px 12px 6px", cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
           <div className="sop-title-row">
-            {isAcked && <span style={{fontSize:13}}>✅</span>}
+            {isAcked && <span style={{ fontSize: 13 }}>✅</span>}
             <span className={`stitle${isAcked ? " dim" : ""}`}>{sop.title}</span>
             <span className="tag tv">{sop.version}</span>
             {isAcked && <span className="tag tok">Acknowledged</span>}
@@ -519,17 +541,17 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
         </div>
         <div className="sop-actions">
           {sop.url
-            ? <button className="btn bg sm" onClick={e => { e.stopPropagation(); window.open(sop.url,"_blank","noopener,noreferrer"); }}>📎 Open</button>
-            : <span className="btn bg sm" style={{opacity:.35,cursor:"default",pointerEvents:"none"}}>📎 No link</span>
+            ? <button className="btn bg sm" onClick={e => { e.stopPropagation(); window.open(sop.url, "_blank", "noopener,noreferrer"); }}>📎 Open</button>
+            : <span className="btn bg sm" style={{ opacity: .35, cursor: "default", pointerEvents: "none" }}>📎 No link</span>
           }
           {!myAck
             ? <button className="btn ba sm" onClick={e => { e.stopPropagation(); onAck(sop); }}>✓ Acknowledge</button>
-            : <span className="btn" style={{background:"#d4edda",border:"1px solid #b2dfdb",color:"#155724",fontSize:11,padding:"5px 12px",borderRadius:6,cursor:"default"}}>✅ Done</span>
+            : <span className="btn" style={{ background: "#d4edda", border: "1px solid #b2dfdb", color: "#155724", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "default" }}>✅ Done</span>
           }
           {canManage && <>
-            <button className="icon-btn be" style={{background:"#fffbf0",borderColor:"#ffeeba",color:"#856404"}}
+            <button className="icon-btn be" style={{ background: "#fffbf0", borderColor: "#ffeeba", color: "#856404" }}
               onClick={e => { e.stopPropagation(); onEdit(sop); }} title="Edit">✏️</button>
-            <button className="icon-btn bd" style={{background:"#fff5f5",borderColor:"#f5c6cb",color:"var(--red)"}}
+            <button className="icon-btn bd" style={{ background: "#fff5f5", borderColor: "#f5c6cb", color: "var(--red)" }}
               onClick={e => { e.stopPropagation(); onDelete(sop); }} title="Delete">🗑️</button>
           </>}
         </div>
@@ -537,14 +559,14 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
       {open && (
         <div className="ack-area">
           <div className="ack-inner">
-            {sop.description && <p style={{fontSize:12,color:"var(--muted)",marginBottom:12,lineHeight:1.65}}>{sop.description}</p>}
+            {sop.description && <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12, lineHeight: 1.65 }}>{sop.description}</p>}
             <div className="ack-lbl">Who has acknowledged ({sortedAcks.length})</div>
             {sortedAcks.length === 0
               ? <div className="no-acks">No one has acknowledged this document yet.</div>
               : <div className="ack-list">
                   {sortedAcks.map((a, i) => (
                     <div key={i} className="ack-list-row">
-                      <span className="ack-list-num">{i+1}.</span>
+                      <span className="ack-list-num">{i + 1}.</span>
                       <div className="av av22 avg">{ini(a.user_name)}</div>
                       <span className="ack-list-name">{a.user_name}</span>
                       <span className="ack-list-date">{fmtDate(a.read_at)}</span>
@@ -552,7 +574,7 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
                   ))}
                 </div>
             }
-            {myAck && <p style={{fontSize:11,color:"var(--green)",marginTop:10}}>✅ You acknowledged on {fmtFull(myAck.read_at)}</p>}
+            {myAck && <p style={{ fontSize: 11, color: "var(--green)", marginTop: 10 }}>✅ You acknowledged on {fmtFull(myAck.read_at)}</p>}
           </div>
         </div>
       )}
@@ -564,8 +586,8 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
 function SopModal({ sop, onSave, onClose }) {
   const isEdit = !!sop;
   const [f, setF] = useState(sop
-    ? { id:sop.id, title:sop.title, version:sop.version, department:sop.department, description:sop.description||"", url:sop.url||"" }
-    : { title:"", version:"v1.0", department:"", description:"", url:"" }
+    ? { id: sop.id, title: sop.title, version: sop.version, department: sop.department, description: sop.description || "", url: sop.url || "" }
+    : { title: "", version: "v1.0", department: "", description: "", url: "" }
   );
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const versionChanged = isEdit && f.version !== sop.version;
@@ -596,7 +618,7 @@ function SopModal({ sop, onSave, onClose }) {
           <input className="inp" placeholder="https://drive.google.com/…" value={f.url} onChange={e => set("url", e.target.value)} /></div>
         <div className="fld"><label className="lbl">Description</label>
           <textarea className="ta" placeholder="Brief scope and purpose of this SOP…" value={f.description} onChange={e => set("description", e.target.value)} /></div>
-        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
           <button className="btn bg" onClick={onClose}>Cancel</button>
           <button className="btn bp" onClick={() => onSave(f)} disabled={!f.title || !f.version || !f.department}>
             {isEdit ? "Save Changes" : "Add SOP"}
@@ -609,11 +631,11 @@ function SopModal({ sop, onSave, onClose }) {
 
 // ─── User Modal ───────────────────────────────────────────────────────────────
 function UserModal({ onAdd, onClose }) {
-  const [f, setF] = useState({ name:"", loginId:"", password:"", role:"staff" });
+  const [f, setF] = useState({ name: "", loginId: "", password: "", role: "staff" });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   return (
     <div className="ov" onClick={onClose}>
-      <div className="mo" style={{maxWidth:420}} onClick={e => e.stopPropagation()}>
+      <div className="mo" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
         <div className="mttl"><span>👤 Add Staff Member</span><button className="cbtn" onClick={onClose}>×</button></div>
         <div className="fld"><label className="lbl">Full Name *</label>
           <input className="inp" placeholder="Full name" value={f.name} onChange={e => set("name", e.target.value)} /></div>
@@ -628,7 +650,7 @@ function UserModal({ onAdd, onClose }) {
             <option value="staff">Staff</option>
             <option value="admin">Admin</option>
           </select></div>
-        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
           <button className="btn bg" onClick={onClose}>Cancel</button>
           <button className="btn bp" onClick={() => onAdd(f)} disabled={!f.name || !f.loginId || !f.password}>Add Member</button>
         </div>
@@ -665,7 +687,7 @@ function Login({ onLogin, setUser }) {
         <div className="fld"><label className="lbl">Password</label>
           <input className="inp" type="password" placeholder="••••••••" value={pass}
             onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} /></div>
-        <button className="btn bp" style={{width:"100%",justifyContent:"center",marginTop:6}}
+        <button className="btn bp" style={{ width: "100%", justifyContent: "center", marginTop: 6 }}
           onClick={go} disabled={loading}>{loading ? "Signing in…" : "Sign In →"}</button>
       </div>
     </div>

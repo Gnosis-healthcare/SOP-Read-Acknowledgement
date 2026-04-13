@@ -193,9 +193,8 @@ export default function App() {
   const [delSop,      setDelSop]      = useState(null);
   const [showStaff,   setShowStaff]   = useState(false);
 
-  // ─── Load data + real-time subscriptions ────────────────────────────────────
+  // ─── 1. Fetch all data once on page load ─────────────────────────────────────
   useEffect(() => {
-    // 1. Initial fetch
     (async () => {
       const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
         supabase.from("users").select("*"),
@@ -207,13 +206,22 @@ export default function App() {
       setReads(r || []);
       setReady(true);
     })();
+  }, []);
 
-    // 2. Real-time: reads
+  // ─── 2. Re-fetch reads fresh + start real-time when user logs in ──────────────
+  useEffect(() => {
+    if (!user) return;
+
+    // Re-fetch all reads fresh every time user logs in
+    // This ensures old SOPs acknowledgements are always up to date
+    supabase.from("reads").select("*").then(({ data }) => {
+      if (data) setReads(data);
+    });
+
     const readsSub = supabase.channel("reads-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
         if (payload.eventType === "INSERT") {
           setReads(prev => {
-            // Prevent duplicate if already added locally
             if (prev.some(r => r.id === payload.new.id)) return prev;
             return [...prev, payload.new];
           });
@@ -224,7 +232,6 @@ export default function App() {
       })
       .subscribe();
 
-    // 3. Real-time: sops
     const sopsSub = supabase.channel("sops-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
         if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
@@ -233,7 +240,6 @@ export default function App() {
       })
       .subscribe();
 
-    // 4. Real-time: users
     const usersSub = supabase.channel("users-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
         if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
@@ -241,15 +247,14 @@ export default function App() {
       })
       .subscribe();
 
-    // 5. Cleanup
     return () => {
       supabase.removeChannel(readsSub);
       supabase.removeChannel(sopsSub);
       supabase.removeChannel(usersSub);
     };
-  }, []);
+  }, [user]);
 
-  // ─── Handlers ───────────────────────────────────────────────────────────────
+  // ─── Handlers ────────────────────────────────────────────────────────────────
   const handleLogin = async (loginId, pass) => {
     const { data } = await supabase.from("users").select("*")
       .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();
@@ -329,21 +334,19 @@ export default function App() {
       console.error("Insert failed:", error);
       alert("Failed to save acknowledgement. Please try again.");
     }
-    // No setReads here — real-time subscription handles the state update
   };
 
-  // ─── Derived ────────────────────────────────────────────────────────────────
+  // ─── Derived state ────────────────────────────────────────────────────────────
   const hasRead = (sop) => reads.some(r =>
     r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id
   );
   const getAcks = (sop) => reads.filter(r =>
     r.sop_id === sop.id && r.version_hash === sop.version_hash
   );
-
   const canManageSops  = user?.role === "admin" || user?.role === "superadmin";
   const canManageUsers = user?.role === "superadmin";
 
-  // ─── Loading ────────────────────────────────────────────────────────────────
+  // ─── Loading ──────────────────────────────────────────────────────────────────
   if (!ready) return (
     <div className="loading">
       <style>{css}</style>
@@ -352,10 +355,10 @@ export default function App() {
     </div>
   );
 
-  // ─── Login ──────────────────────────────────────────────────────────────────
+  // ─── Login ────────────────────────────────────────────────────────────────────
   if (!user) return <Login onLogin={handleLogin} setUser={setUser} />;
 
-  // ─── Main ───────────────────────────────────────────────────────────────────
+  // ─── Main ─────────────────────────────────────────────────────────────────────
   const q          = search.toLowerCase();
   const filtered   = sops.filter(s => !q || s.title.toLowerCase().includes(q) || s.department.toLowerCase().includes(q));
   const depts      = [...new Set(sops.map(s => s.department))].sort();
@@ -404,7 +407,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Dept tabs */}
+      {/* Department tabs */}
       {!showStaff && (
         <div className="dept-tabs">
           {tabDepts.map(d => (
@@ -414,7 +417,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Main content */}
+      {/* Page content */}
       <div className="pg">
         {showStaff ? (
           <div className="sec-card">
@@ -431,7 +434,9 @@ export default function App() {
                   <div className="av av28">{ini(u.name)}</div>
                   <div className="staff-info">
                     <div className="staff-name">{u.name}</div>
-                    <div className="staff-id">ID: <strong>{u.login_id}</strong> · <span className={`rb ${u.role}`}>{u.role}</span></div>
+                    <div className="staff-id">
+                      ID: <strong>{u.login_id}</strong> · <span className={`rb ${u.role}`}>{u.role}</span>
+                    </div>
                   </div>
                   <button className="btn bd sm" onClick={() => handleRemoveUser(u.id)}>🗑 Remove</button>
                 </div>
@@ -559,7 +564,9 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
       {open && (
         <div className="ack-area">
           <div className="ack-inner">
-            {sop.description && <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12, lineHeight: 1.65 }}>{sop.description}</p>}
+            {sop.description && (
+              <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12, lineHeight: 1.65 }}>{sop.description}</p>
+            )}
             <div className="ack-lbl">Who has acknowledged ({sortedAcks.length})</div>
             {sortedAcks.length === 0
               ? <div className="no-acks">No one has acknowledged this document yet.</div>
@@ -574,7 +581,11 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
                   ))}
                 </div>
             }
-            {myAck && <p style={{ fontSize: 11, color: "var(--green)", marginTop: 10 }}>✅ You acknowledged on {fmtFull(myAck.read_at)}</p>}
+            {myAck && (
+              <p style={{ fontSize: 11, color: "var(--green)", marginTop: 10 }}>
+                ✅ You acknowledged on {fmtFull(myAck.read_at)}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -603,21 +614,31 @@ function SopModal({ sop, onSave, onClose }) {
             ⚠️ Version changed from <strong>{sop.version}</strong> to <strong>{f.version}</strong> — this will reset all acknowledgements.
           </div>
         )}
-        <div className="fld"><label className="lbl">Document Title *</label>
-          <input className="inp" placeholder="e.g. TP-QC-001 Internal QC Procedure" value={f.title} onChange={e => set("title", e.target.value)} /></div>
+        <div className="fld">
+          <label className="lbl">Document Title *</label>
+          <input className="inp" placeholder="e.g. TP-QC-001 Internal QC Procedure" value={f.title} onChange={e => set("title", e.target.value)} />
+        </div>
         <div className="g2">
-          <div className="fld"><label className="lbl">Version *</label>
-            <input className="inp" placeholder="v1.0" value={f.version} onChange={e => set("version", e.target.value)} /></div>
-          <div className="fld"><label className="lbl">Department *</label>
+          <div className="fld">
+            <label className="lbl">Version *</label>
+            <input className="inp" placeholder="v1.0" value={f.version} onChange={e => set("version", e.target.value)} />
+          </div>
+          <div className="fld">
+            <label className="lbl">Department *</label>
             <select className="sel" value={f.department} onChange={e => set("department", e.target.value)}>
               <option value="">Select…</option>
               {DEPTS.map(d => <option key={d}>{d}</option>)}
-            </select></div>
+            </select>
+          </div>
         </div>
-        <div className="fld"><label className="lbl">Document URL</label>
-          <input className="inp" placeholder="https://drive.google.com/…" value={f.url} onChange={e => set("url", e.target.value)} /></div>
-        <div className="fld"><label className="lbl">Description</label>
-          <textarea className="ta" placeholder="Brief scope and purpose of this SOP…" value={f.description} onChange={e => set("description", e.target.value)} /></div>
+        <div className="fld">
+          <label className="lbl">Document URL</label>
+          <input className="inp" placeholder="https://drive.google.com/…" value={f.url} onChange={e => set("url", e.target.value)} />
+        </div>
+        <div className="fld">
+          <label className="lbl">Description</label>
+          <textarea className="ta" placeholder="Brief scope and purpose of this SOP…" value={f.description} onChange={e => set("description", e.target.value)} />
+        </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
           <button className="btn bg" onClick={onClose}>Cancel</button>
           <button className="btn bp" onClick={() => onSave(f)} disabled={!f.title || !f.version || !f.department}>
@@ -636,23 +657,36 @@ function UserModal({ onAdd, onClose }) {
   return (
     <div className="ov" onClick={onClose}>
       <div className="mo" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
-        <div className="mttl"><span>👤 Add Staff Member</span><button className="cbtn" onClick={onClose}>×</button></div>
-        <div className="fld"><label className="lbl">Full Name *</label>
-          <input className="inp" placeholder="Full name" value={f.name} onChange={e => set("name", e.target.value)} /></div>
-        <div className="g2">
-          <div className="fld"><label className="lbl">Login ID *</label>
-            <input className="inp" placeholder="e.g. lee001" value={f.loginId} onChange={e => set("loginId", e.target.value)} /></div>
-          <div className="fld"><label className="lbl">Password *</label>
-            <input className="inp" placeholder="Password" value={f.password} onChange={e => set("password", e.target.value)} /></div>
+        <div className="mttl">
+          <span>👤 Add Staff Member</span>
+          <button className="cbtn" onClick={onClose}>×</button>
         </div>
-        <div className="fld"><label className="lbl">Role</label>
+        <div className="fld">
+          <label className="lbl">Full Name *</label>
+          <input className="inp" placeholder="Full name" value={f.name} onChange={e => set("name", e.target.value)} />
+        </div>
+        <div className="g2">
+          <div className="fld">
+            <label className="lbl">Login ID *</label>
+            <input className="inp" placeholder="e.g. lee001" value={f.loginId} onChange={e => set("loginId", e.target.value)} />
+          </div>
+          <div className="fld">
+            <label className="lbl">Password *</label>
+            <input className="inp" placeholder="Password" value={f.password} onChange={e => set("password", e.target.value)} />
+          </div>
+        </div>
+        <div className="fld">
+          <label className="lbl">Role</label>
           <select className="sel" value={f.role} onChange={e => set("role", e.target.value)}>
             <option value="staff">Staff</option>
             <option value="admin">Admin</option>
-          </select></div>
+          </select>
+        </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
           <button className="btn bg" onClick={onClose}>Cancel</button>
-          <button className="btn bp" onClick={() => onAdd(f)} disabled={!f.name || !f.loginId || !f.password}>Add Member</button>
+          <button className="btn bp" onClick={() => onAdd(f)} disabled={!f.name || !f.loginId || !f.password}>
+            Add Member
+          </button>
         </div>
       </div>
     </div>
@@ -665,6 +699,7 @@ function Login({ onLogin, setUser }) {
   const [pass,    setPass]    = useState("");
   const [err,     setErr]     = useState("");
   const [loading, setLoading] = useState(false);
+
   const go = async () => {
     if (!loginId || !pass) return;
     setLoading(true); setErr("");
@@ -673,6 +708,7 @@ function Login({ onLogin, setUser }) {
     else   setErr("Invalid ID or password.");
     setLoading(false);
   };
+
   return (
     <div className="lw">
       <style>{css}</style>
@@ -681,14 +717,20 @@ function Login({ onLogin, setUser }) {
         <div className="lt">SOP Portal</div>
         <div className="ls">Gnosis Laboratories · Document Acknowledgement System</div>
         {err && <div className="err">⚠️ {err}</div>}
-        <div className="fld"><label className="lbl">Staff ID</label>
+        <div className="fld">
+          <label className="lbl">Staff ID</label>
           <input className="inp" placeholder="Enter your ID" value={loginId}
-            onChange={e => setLoginId(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} /></div>
-        <div className="fld"><label className="lbl">Password</label>
+            onChange={e => setLoginId(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} />
+        </div>
+        <div className="fld">
+          <label className="lbl">Password</label>
           <input className="inp" type="password" placeholder="••••••••" value={pass}
-            onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} /></div>
+            onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} />
+        </div>
         <button className="btn bp" style={{ width: "100%", justifyContent: "center", marginTop: 6 }}
-          onClick={go} disabled={loading}>{loading ? "Signing in…" : "Sign In →"}</button>
+          onClick={go} disabled={loading}>
+          {loading ? "Signing in…" : "Sign In →"}
+        </button>
       </div>
     </div>
   );

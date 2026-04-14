@@ -233,7 +233,13 @@ useEffect(() => {
     }
     
 console.log("✅ Data fetched:", data?.length, "reads");
-console.log("Reads for current user:", data?.filter(r => r.user_id === user.id));
+console.log("Reads for current user:", data?.filter(r => r.user_id === user.id).map(r => ({
+  user_id: r.user_id,
+  user_id_type: typeof r.user_id,
+  current_user_id: user.id,
+  current_user_id_type: typeof user.id,
+  match: r.user_id === user.id
+})));
 
 if (active && data) {
   setReads(data);

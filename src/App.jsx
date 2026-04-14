@@ -218,7 +218,7 @@ export default function App() {
     // Re-fetch all reads fresh on every login — ensures user_id comparisons
     // always work against live DB data rather than stale pre-login state
     (async () => {
-      const { data } = await supabase.from("reads").select("*");
+      const { data } = await supabase.from("reads").select("*").eq("user_id", user.id);
       if (active && data) setReads(data);
     })();
 

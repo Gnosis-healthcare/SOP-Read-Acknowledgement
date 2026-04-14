@@ -210,62 +210,60 @@ export default function App() {
 
   // ─── 2. Re-fetch reads + start realtime on login ──────────────────────────────
   // FIX A: async IIFE with `active` guard prevents stale setState after logout
-  useEffect(() => {
-    if (!user) return;
+useEffect(() => {
+  if (!user) return;
 
-    let active = true;
+  let active = true;
 
-    // Re-fetch all reads fresh on every login — ensures user_id comparisons
-    // always work against live DB data rather than stale pre-login state
-    (async () => {
-      const { data } = await supabase.from("reads").select("*").eq("user_id", user.id);
-      if (active && data) setReads(data);
-    })();
+  // Fetch reads on every login
+  (async () => {
+    // Fetch ALL reads (to show who acknowledged)
+    const { data } = await supabase.from("reads").select("*");
+    if (active && data) setReads(data);
+  })();
 
-    const readsSub = supabase.channel("reads-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
-        if (payload.eventType === "INSERT") {
-          setReads(prev => {
-            // FIX B: strip the matching optimistic (_pending) row, then add the
-            // confirmed DB row — prevents duplicates in the ack list
-            const withoutPending = prev.filter(r =>
-              !(r._pending &&
-                r.sop_id       === payload.new.sop_id &&
-                r.user_id      === payload.new.user_id &&
-                r.version_hash === payload.new.version_hash)
-            );
-            if (withoutPending.some(r => r.id === payload.new.id)) return withoutPending;
-            return [...withoutPending, payload.new];
-          });
-        }
-        if (payload.eventType === "DELETE") {
-          setReads(prev => prev.filter(r => r.id !== payload.old.id));
-        }
-      })
-      .subscribe();
+  const readsSub = supabase.channel("reads-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
+      if (payload.eventType === "INSERT") {
+        setReads(prev => {
+          const withoutPending = prev.filter(r =>
+            !(r._pending &&
+              r.sop_id       === payload.new.sop_id &&
+              r.user_id      === payload.new.user_id &&
+              r.version_hash === payload.new.version_hash)
+          );
+          if (withoutPending.some(r => r.id === payload.new.id)) return withoutPending;
+          return [...withoutPending, payload.new];
+        });
+      }
+      if (payload.eventType === "DELETE") {
+        setReads(prev => prev.filter(r => r.id !== payload.old.id));
+      }
+    })
+    .subscribe();
 
-    const sopsSub = supabase.channel("sops-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
-        if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
-        if (payload.eventType === "UPDATE") setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
-        if (payload.eventType === "DELETE") setSops(prev => prev.filter(s => s.id !== payload.old.id));
-      })
-      .subscribe();
+  const sopsSub = supabase.channel("sops-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
+      if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
+      if (payload.eventType === "UPDATE") setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+      if (payload.eventType === "DELETE") setSops(prev => prev.filter(s => s.id !== payload.old.id));
+    })
+    .subscribe();
 
-    const usersSub = supabase.channel("users-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
-        if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
-        if (payload.eventType === "DELETE") setUsers(prev => prev.filter(u => u.id !== payload.old.id));
-      })
-      .subscribe();
+  const usersSub = supabase.channel("users-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
+      if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
+      if (payload.eventType === "DELETE") setUsers(prev => prev.filter(u => u.id !== payload.old.id));
+    })
+    .subscribe();
 
-    return () => {
-      active = false; // cancel any in-flight re-fetch setState
-      supabase.removeChannel(readsSub);
-      supabase.removeChannel(sopsSub);
-      supabase.removeChannel(usersSub);
-    };
-  }, [user]);
+  return () => {
+    active = false;
+    supabase.removeChannel(readsSub);
+    supabase.removeChannel(sopsSub);
+    supabase.removeChannel(usersSub);
+  };
+}, [user]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
   const handleLogin = async (loginId, pass) => {

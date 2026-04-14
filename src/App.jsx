@@ -194,19 +194,77 @@ export default function App() {
   const [showStaff,   setShowStaff]   = useState(false);
 
   // ─── 1. Fetch all data once on page load ──────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
-        supabase.from("users").select("*"),
-        supabase.from("sops").select("*"),
-        supabase.from("reads").select("*"),
-      ]);
-      setUsers(u || []);
-      setSops(s || []);
-      setReads(r || []);
-      setReady(true);
-    })();
-  }, []);
+useEffect(() => {
+  (async () => {
+    const [{ data: u }, { data: s }] = await Promise.all([
+      supabase.from("users").select("*"),
+      supabase.from("sops").select("*"),
+      // ← REMOVED reads from here!
+    ]);
+    setUsers(u || []);
+    setSops(s || []);
+    setReads([]); // ← Start with EMPTY reads
+    setReady(true);
+  })();
+}, []);
+
+// ─── 2. Re-fetch reads + start realtime on login ──────────────────────────────
+useEffect(() => {
+  if (!user) {
+    setReads([]); // ← CLEAR reads when user logs out
+    return;
+  }
+
+  let active = true;
+
+  // Fetch ALL reads fresh on login
+  (async () => {
+    const { data } = await supabase.from("reads").select("*");
+    if (active && data) setReads(data);
+  })();
+
+  const readsSub = supabase.channel("reads-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
+      if (payload.eventType === "INSERT") {
+        setReads(prev => {
+          const withoutPending = prev.filter(r =>
+            !(r._pending &&
+              r.sop_id       === payload.new.sop_id &&
+              r.user_id      === payload.new.user_id &&
+              r.version_hash === payload.new.version_hash)
+          );
+          if (withoutPending.some(r => r.id === payload.new.id)) return withoutPending;
+          return [...withoutPending, payload.new];
+        });
+      }
+      if (payload.eventType === "DELETE") {
+        setReads(prev => prev.filter(r => r.id !== payload.old.id));
+      }
+    })
+    .subscribe();
+
+  const sopsSub = supabase.channel("sops-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
+      if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
+      if (payload.eventType === "UPDATE") setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+      if (payload.eventType === "DELETE") setSops(prev => prev.filter(s => s.id !== payload.old.id));
+    })
+    .subscribe();
+
+  const usersSub = supabase.channel("users-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
+      if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
+      if (payload.eventType === "DELETE") setUsers(prev => prev.filter(u => u.id !== payload.old.id));
+    })
+    .subscribe();
+
+  return () => {
+    active = false;
+    supabase.removeChannel(readsSub);
+    supabase.removeChannel(sopsSub);
+    supabase.removeChannel(usersSub);
+  };
+}, [user]);
 
   // ─── 2. Re-fetch reads + start realtime on login ──────────────────────────────
   // FIX A: async IIFE with `active` guard prevents stale setState after logout

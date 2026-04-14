@@ -232,9 +232,15 @@ useEffect(() => {
       return;
     }
     
-    console.log("✅ Data fetched:", data?.length, "reads");
+console.log("✅ Data fetched:", data?.length, "reads");
+console.log("Reads for current user:", data?.filter(r => r.user_id === user.id));
+
+if (active && data) {
+  setReads(data);
+  console.log("✅ State updated, reads should now be:", data?.length);
+}
     
-    if (active && data) setReads(data);
+
   })();
 
   const readsSub = supabase.channel("reads-changes")
@@ -442,9 +448,19 @@ useEffect(() => {
   };
 
   // ─── Derived state ────────────────────────────────────────────────────────────
-  const hasRead = (sop) => reads.some(r =>
+const hasRead = (sop) => {
+  const userReads = reads.filter(r => r.sop_id === sop.id && r.version_hash === sop.version_hash);
+  console.log(`Checking SOP ${sop.id}:`, {
+    totalReads: reads.length,
+    readsForThisSop: userReads.length,
+    userReadIt: userReads.some(r => r.user_id === user?.id),
+    currentUserId: user?.id
+  });
+  
+  return reads.some(r =>
     r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id
   );
+};
   const getAcks = (sop) => reads.filter(r =>
     r.sop_id === sop.id && r.version_hash === sop.version_hash
   );

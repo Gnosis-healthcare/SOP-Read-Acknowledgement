@@ -210,16 +210,30 @@ useEffect(() => {
 
 // ─── 2. Re-fetch reads + start realtime on login ──────────────────────────────
 useEffect(() => {
+  console.log("🔄 useEffect triggered, user:", user);
+  
   if (!user) {
-    setReads([]); // ← CLEAR reads when user logs out
+    console.log("❌ No user, clearing reads");
+    setReads([]);
     return;
   }
+
+  console.log("✅ User logged in:", user.id);
 
   let active = true;
 
   // Fetch ALL reads fresh on login
   (async () => {
-    const { data } = await supabase.from("reads").select("*");
+    console.log("📥 Fetching reads from Supabase...");
+    const { data, error } = await supabase.from("reads").select("*");
+    
+    if (error) {
+      console.error("❌ Error:", error);
+      return;
+    }
+    
+    console.log("✅ Data fetched:", data?.length, "reads");
+    
     if (active && data) setReads(data);
   })();
 

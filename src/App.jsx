@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// ─── Supabase ─────────────────────────────────────────────────────────────────
+// ─── Supabase ──────────────────────────────────────────────────────────────
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_KEY
 );
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 const uid     = () => Math.random().toString(36).slice(2, 10);
 const ini     = (n) => n.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
 const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -33,7 +33,7 @@ const DEPT_COLOURS = {
 };
 const ds = (d) => DEPT_COLOURS[d] || { bg: "rgba(108,117,125,.1)", border: "rgba(108,117,125,.35)", text: "#6c757d" };
 
-// ─── CSS ──────────────────────────────────────────────────────────────────────
+// ─── CSS ───────────────────────────────────────────────────────────────────
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -178,7 +178,7 @@ const css = `
   @keyframes spin{to{transform:rotate(360deg)}}
 `;
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+// ─── App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const [user,        setUser]        = useState(null);
   const [users,       setUsers]       = useState([]);
@@ -194,162 +194,75 @@ export default function App() {
   const [showStaff,   setShowStaff]   = useState(false);
 
   // ─── 1. Fetch all data once on page load ──────────────────────────────────────
-useEffect(() => {
-  (async () => {
-    const [{ data: u }, { data: s }] = await Promise.all([
-      supabase.from("users").select("*"),
-      supabase.from("sops").select("*"),
-      // ← REMOVED reads from here!
-    ]);
-    setUsers(u || []);
-    setSops(s || []);
-    setReads([]); // ← Start with EMPTY reads
-    setReady(true);
-  })();
-}, []);
-
-// ─── 2. Re-fetch reads + start realtime on login ──────────────────────────────
-useEffect(() => {
-  console.log("🔄 useEffect triggered, user:", user);
-  
-  if (!user) {
-    console.log("❌ No user, clearing reads");
-    setReads([]);
-    return;
-  }
-
-  console.log("✅ User logged in:", user.id);
-
-  let active = true;
-
-  // Fetch ALL reads fresh on login
-  (async () => {
-    console.log("📥 Fetching reads from Supabase...");
-    const { data, error } = await supabase.from("reads").select("*");
-    
-    if (error) {
-      console.error("❌ Error:", error);
-      return;
-    }
-    
-console.log("✅ Data fetched:", data?.length, "reads");
-console.log("Reads for current user:", data?.filter(r => r.user_id === user.id).map(r => ({
-  user_id: r.user_id,
-  user_id_type: typeof r.user_id,
-  current_user_id: user.id,
-  current_user_id_type: typeof user.id,
-  match: r.user_id === user.id
-})));
-
-if (active && data) {
-  setReads(data);
-  console.log("✅ State updated, reads should now be:", data?.length);
-}
-    
-
-  })();
-
-  const readsSub = supabase.channel("reads-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
-      if (payload.eventType === "INSERT") {
-        setReads(prev => {
-          const withoutPending = prev.filter(r =>
-            !(r._pending &&
-              r.sop_id       === payload.new.sop_id &&
-              r.user_id      === payload.new.user_id &&
-              r.version_hash === payload.new.version_hash)
-          );
-          if (withoutPending.some(r => r.id === payload.new.id)) return withoutPending;
-          return [...withoutPending, payload.new];
-        });
-      }
-      if (payload.eventType === "DELETE") {
-        setReads(prev => prev.filter(r => r.id !== payload.old.id));
-      }
-    })
-    .subscribe();
-
-  const sopsSub = supabase.channel("sops-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
-      if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
-      if (payload.eventType === "UPDATE") setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
-      if (payload.eventType === "DELETE") setSops(prev => prev.filter(s => s.id !== payload.old.id));
-    })
-    .subscribe();
-
-  const usersSub = supabase.channel("users-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
-      if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
-      if (payload.eventType === "DELETE") setUsers(prev => prev.filter(u => u.id !== payload.old.id));
-    })
-    .subscribe();
-
-  return () => {
-    active = false;
-    supabase.removeChannel(readsSub);
-    supabase.removeChannel(sopsSub);
-    supabase.removeChannel(usersSub);
-  };
-}, [user]);
+  useEffect(() => {
+    (async () => {
+      const [{ data: u }, { data: s }, { data: r }] = await Promise.all([
+        supabase.from("users").select("*"),
+        supabase.from("sops").select("*"),
+        supabase.from("reads").select("*"),
+      ]);
+      setUsers(u || []);
+      setSops(s || []);
+      setReads(r || []);
+      setReady(true);
+    })();
+  }, []);
 
   // ─── 2. Re-fetch reads + start realtime on login ──────────────────────────────
-  // FIX A: async IIFE with `active` guard prevents stale setState after logout
-useEffect(() => {
-  if (!user) return;
+  useEffect(() => {
+    if (!user) return;
 
-  let active = true;
+    let active = true;
 
-  // Fetch reads on every login
-  (async () => {
-    // Fetch ALL reads (to show who acknowledged)
-    const { data } = await supabase.from("reads").select("*");
-    if (active && data) setReads(data);
-  })();
+    (async () => {
+      const { data } = await supabase.from("reads").select("*");
+      if (active && data) setReads(data);
+    })();
 
-  const readsSub = supabase.channel("reads-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
-      if (payload.eventType === "INSERT") {
-        setReads(prev => {
-          const withoutPending = prev.filter(r =>
-            !(r._pending &&
-              r.sop_id       === payload.new.sop_id &&
-              r.user_id      === payload.new.user_id &&
-              r.version_hash === payload.new.version_hash)
-          );
-          if (withoutPending.some(r => r.id === payload.new.id)) return withoutPending;
-          return [...withoutPending, payload.new];
-        });
-      }
-      if (payload.eventType === "DELETE") {
-        setReads(prev => prev.filter(r => r.id !== payload.old.id));
-      }
-    })
-    .subscribe();
+    const readsSub = supabase.channel("reads-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "reads" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setReads(prev => {
+            const withoutPending = prev.filter(r =>
+              !(r._pending &&
+                r.sop_id       === payload.new.sop_id &&
+                r.user_id      === payload.new.user_id &&
+                r.version_hash === payload.new.version_hash)
+            );
+            if (withoutPending.some(r => r.id === payload.new.id)) return withoutPending;
+            return [...withoutPending, payload.new];
+          });
+        }
+        if (payload.eventType === "DELETE") {
+          setReads(prev => prev.filter(r => r.id !== payload.old.id));
+        }
+      })
+      .subscribe();
 
-  const sopsSub = supabase.channel("sops-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
-      if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
-      if (payload.eventType === "UPDATE") setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
-      if (payload.eventType === "DELETE") setSops(prev => prev.filter(s => s.id !== payload.old.id));
-    })
-    .subscribe();
+    const sopsSub = supabase.channel("sops-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sops" }, (payload) => {
+        if (payload.eventType === "INSERT") setSops(prev => [...prev, payload.new]);
+        if (payload.eventType === "UPDATE") setSops(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+        if (payload.eventType === "DELETE") setSops(prev => prev.filter(s => s.id !== payload.old.id));
+      })
+      .subscribe();
 
-  const usersSub = supabase.channel("users-changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
-      if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
-      if (payload.eventType === "DELETE") setUsers(prev => prev.filter(u => u.id !== payload.old.id));
-    })
-    .subscribe();
+    const usersSub = supabase.channel("users-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, (payload) => {
+        if (payload.eventType === "INSERT") setUsers(prev => [...prev, payload.new]);
+        if (payload.eventType === "DELETE") setUsers(prev => prev.filter(u => u.id !== payload.old.id));
+      })
+      .subscribe();
 
-  return () => {
-    active = false;
-    supabase.removeChannel(readsSub);
-    supabase.removeChannel(sopsSub);
-    supabase.removeChannel(usersSub);
-  };
-}, [user]);
+    return () => {
+      active = false;
+      supabase.removeChannel(readsSub);
+      supabase.removeChannel(sopsSub);
+      supabase.removeChannel(usersSub);
+    };
+  }, [user]);
 
-  // ─── Handlers ────────────────────────────────────────────────────────────────
+  // ─── Handlers ─────────────────────────────────────────────────────────────────
   const handleLogin = async (loginId, pass) => {
     const { data } = await supabase.from("users").select("*")
       .eq("login_id", loginId.toLowerCase().trim()).eq("password", pass).single();
@@ -413,13 +326,6 @@ useEffect(() => {
     alert(`✅ Removed ${toDelete.length} duplicate record${toDelete.length !== 1 ? "s" : ""}.`);
   };
 
-  // FIX C: Optimistic update without .select().single()
-  // Your `reads.id` is a serial integer (nextval sequence), not a UUID.
-  // Calling .select().single() after insert was failing silently because the
-  // anon key doesn't have SELECT-after-INSERT permission by default with serial PKs.
-  // Instead: write optimistic row to state immediately for instant UI feedback,
-  // do a plain insert (no .select()), and let the realtime channel deliver the
-  // confirmed row. On error, roll back the optimistic row and show the message.
   const acknowledge = async (sop) => {
     const already = reads.find(r =>
       r.sop_id       === sop.id &&
@@ -436,44 +342,41 @@ useEffect(() => {
       read_at:      new Date().toISOString(),
     };
 
-    // Add optimistic row immediately so the button flips to ✅ Done instantly
     const optimisticRow = { ...newRead, id: "_pending_" + uid(), _pending: true };
     setReads(prev => [...prev, optimisticRow]);
 
-    // Plain insert — no .select().single() — compatible with serial integer id
     const { error } = await supabase.from("reads").insert(newRead);
 
     if (error) {
       console.error("Acknowledge insert failed:", error);
-      // Roll back optimistic row so the button returns to Acknowledge
       setReads(prev => prev.filter(r => r.id !== optimisticRow.id));
       alert("Failed to save acknowledgement: " + error.message);
     }
-    // On success: realtime INSERT event will arrive and FIX B above will
-    // swap out the _pending row for the real DB row automatically
   };
 
-  // ─── Derived state ────────────────────────────────────────────────────────────
-const hasRead = (sop) => {
-  const userReads = reads.filter(r => r.sop_id === sop.id && r.version_hash === sop.version_hash);
-  console.log(`Checking SOP ${sop.id}:`, {
-    totalReads: reads.length,
-    readsForThisSop: userReads.length,
-    userReadIt: userReads.some(r => r.user_id === user?.id),
-    currentUserId: user?.id
-  });
-  
-  return reads.some(r =>
+  // ─── Derived state ───────────────────────────────────────────────────────────
+  const hasRead = (sop) => reads.some(r =>
     r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id
   );
-};
-  const getAcks = (sop) => reads.filter(r =>
-    r.sop_id === sop.id && r.version_hash === sop.version_hash
-  );
+
+  const getAcks = (sop) => {
+    if (user?.role === "superadmin") {
+      // Superadmin sees ALL acknowledgements
+      return reads.filter(r =>
+        r.sop_id === sop.id && r.version_hash === sop.version_hash
+      );
+    } else {
+      // Regular staff only sees their own
+      return reads.filter(r =>
+        r.sop_id === sop.id && r.version_hash === sop.version_hash && r.user_id === user?.id
+      );
+    }
+  };
+
   const canManageSops  = user?.role === "admin" || user?.role === "superadmin";
   const canManageUsers = user?.role === "superadmin";
 
-  // ─── Loading ──────────────────────────────────────────────────────────────────
+  // ─── Loading ─────────────────────────────────────────────────────────────────
   if (!ready) return (
     <div className="loading">
       <style>{css}</style>
@@ -482,10 +385,10 @@ const hasRead = (sop) => {
     </div>
   );
 
-  // ─── Login ────────────────────────────────────────────────────────────────────
+  // ─── Login ──────────────────────────────────────────────────────────────────
   if (!user) return <Login onLogin={handleLogin} setUser={setUser} />;
 
-  // ─── Main ─────────────────────────────────────────────────────────────────────
+  // ─── Main ──────────────────────────────────────────────────────────────────
   const q          = search.toLowerCase();
   const filtered   = sops.filter(s => !q || s.title.toLowerCase().includes(q) || s.department.toLowerCase().includes(q));
   const depts      = [...new Set(sops.map(s => s.department))].sort();
@@ -644,7 +547,7 @@ const hasRead = (sop) => {
   );
 }
 
-// ─── SOP Row ──────────────────────────────────────────────────────────────────
+// ─── SOP Row ──────────────────────────────────────────────────────────────
 function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canManage }) {
   const [open, setOpen] = useState(false);
   const sortedAcks = [...acks].sort((a, b) => a.user_name.localeCompare(b.user_name));
@@ -720,7 +623,7 @@ function SopRow({ sop, acks, user, myAck, onAck, onEdit, onDelete, isAcked, canM
   );
 }
 
-// ─── SOP Modal ────────────────────────────────────────────────────────────────
+// ─── SOP Modal ──────────────────────────────────────────────────────────────
 function SopModal({ sop, onSave, onClose }) {
   const isEdit = !!sop;
   const [f, setF] = useState(sop
@@ -777,7 +680,7 @@ function SopModal({ sop, onSave, onClose }) {
   );
 }
 
-// ─── User Modal ───────────────────────────────────────────────────────────────
+// ─── User Modal ─────────────────────────────────────────────────────────────
 function UserModal({ onAdd, onClose }) {
   const [f, setF] = useState({ name: "", loginId: "", password: "", role: "staff" });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -820,7 +723,7 @@ function UserModal({ onAdd, onClose }) {
   );
 }
 
-// ─── Login ────────────────────────────────────────────────────────────────────
+// ─── Login ───────���──────────────────────────────────────────────────────────
 function Login({ onLogin, setUser }) {
   const [loginId, setLoginId] = useState("");
   const [pass,    setPass]    = useState("");
